@@ -2,14 +2,16 @@ CC = gcc
 CFLAGS = -static -g -std=gnu99 -I./gem5_resources/include
 LDFLAGS = -L./gem5_resources/lib -lm5
 
-TARGET = bfs_benchmark.bin
+TARGET_BFS = bfs_benchmark.bin
+TARGET_MATRIX = matrix_benchmark.bin
 
-SOURCES = src/main.c src/graph_generator.c
+all: $(TARGET_BFS) $(TARGET_MATRIX)
 
-all: $(TARGET)
+$(TARGET_BFS): src/bfs_benchmark.c src/graph_generator.c
+	$(CC) $(CFLAGS) src/bfs_benchmark.c src/graph_generator.c $(LDFLAGS) -o $(TARGET_BFS)
 
-$(TARGET): $(SOURCES)
-	$(CC) $(CFLAGS) $(SOURCES) $(LDFLAGS) -o $(TARGET)
+$(TARGET_MATRIX): src/matrix_benchmark.c
+	$(CC) $(CFLAGS) src/matrix_benchmark.c $(LDFLAGS) -o $(TARGET_MATRIX)
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET_BFS) $(TARGET_MATRIX)
