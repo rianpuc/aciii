@@ -5,7 +5,7 @@ void printf();
 int** alocarMatriz(int n, int m);
 void preencherMatriz(int **matriz, int n, int m, int max);
 void freeMatriz(int **matriz, int n, int m);
-int** multiplicarMatrizes(int **matrizA, int **matrizB, int linhasA, int colunasA, int colunasB);
+void multiplicarMatrizes(int **matrizA, int **matrizB, int **matrizResult, int n);
 
 int** alocarMatriz(int n, int m) {
     int **matriz = (int**) malloc(n * sizeof(int*));
@@ -55,11 +55,9 @@ void multiplicarMatrizes(int **matrizA, int **matrizB, int **matrizResult, int n
             matrizResult[i][j] = soma;
         }
     }
-
-    return matrizResult;
 }
 
-void parse_args(unsigned int argc, char *argv[], unsigned int *n, int *seed) {
+void parse_args(unsigned int argc, char **argv, unsigned int *n, int *seed) {
     if (argc != 3) {
         printf("Proper usage: ./program MATRIX_SIZE SEED");
         exit(1);
@@ -72,7 +70,7 @@ void parse_args(unsigned int argc, char *argv[], unsigned int *n, int *seed) {
     *seed = atoi(argv[2]);
 }
 
-int main(int argc, int **argv) {
+int main(int argc, char **argv) {
     unsigned int n;
     int seed;
     parse_args(argc, argv, &n, &seed);
@@ -83,7 +81,7 @@ int main(int argc, int **argv) {
     int **matrizResult = alocarMatriz(n, n);
 
     m5_reset_stats(0, 0);
-    multiplicarMatrizes(matrizA, matrizB, n, n, n);
+    multiplicarMatrizes(matrizA, matrizB, matrizResult, n);
     m5_dump_stats(0, 0);
 
     // liberar memória
