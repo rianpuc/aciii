@@ -9,8 +9,8 @@ typedef enum
 
 typedef struct Node
 {
-    int id;
     struct Node *next;
+    int id;
 } Node;
 
 typedef struct
