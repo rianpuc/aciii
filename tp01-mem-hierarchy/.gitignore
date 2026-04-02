@@ -5,3 +5,4 @@
 .idea/
 cmake-build-*/
 resultados/
+gem5/

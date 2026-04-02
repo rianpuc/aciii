@@ -4,9 +4,9 @@ import argparse
 
 # argumentos do terminal
 parser = argparse.ArgumentParser(description='Simulador de Cache - Projeto de Arquitetura')
-parser.add_argument('--binary', type=str, required=True, help='Caminho para o binario em C')
-parser.add_argument('--args', type=str, default='', help='Argumentos para o binario (entre aspas)')
-parser.add_argument('--l1d_size', type=str, default='32kB', help='Tamanho do L1 Data Cache')
+parser.add_argument('--binary', type=str, required=True, help='Caminho para o binario')
+parser.add_argument('--args', type=str, default='', help='Argumentos para o binario')
+parser.add_argument('--l1d_size', type=str, default='32kB', help='Tamanho do L1 Cache')
 parser.add_argument('--l1_assoc', type=int, default=2, help='Associatividade do L1')
 parser.add_argument('--block_size', type=int, default=64, help='Tamanho da linha de cache (em bytes)')
 options = parser.parse_args()
