@@ -1,16 +1,16 @@
 #!/bin/bash
 
 GEM5_EXEC="gem5/build/ALL/gem5.opt"
-SCRIPT_GEM5="configs/simulator.py"
+SCRIPT_GEM5="../configs/simulator.py"
 
 BIN_BFS="../bfs_benchmark.bin"
 ARGS_BFS="2000 0 42" # 2000 vertices, esparso, seed 42
 
-BIN_MATRIX="../matrix_benchmark.bin"
+BIN_MATRIX_NAIVE="../matrix_naive_benchmark.bin"
+BIN_MATRIX_OPTIMIZED="../matrix_optimized_benchmark.bin"
 ARGS_MATRIX="128 42" # matriz 128x128, seed 42
 
 mkdir -p resultados
-
 
 run_tests() {
     local WORKLOAD_NAME=$1
@@ -23,7 +23,7 @@ run_tests() {
     # variaveis constantes: L1 size = 32kB, associacao = 2
     for LINHA in 16 32 64 128
     do
-        DIR_OUT="resultados/${WORKLOAD_NAME}_Exp1_Linha_${LINHA}B"
+        DIR_OUT="resultados/${WORKLOAD_NAME}_BlockSize_Linha_${LINHA}B"
         echo "[Block Size] = ${LINHA}B..."
         
         $GEM5_EXEC -d $DIR_OUT $SCRIPT_GEM5 \
@@ -38,7 +38,7 @@ run_tests() {
     # variaveis constantes: Linha (block size) = 64B, associacao = 2
     for CAPACIDADE in "8kB" "16kB" "32kB" "64kB" "128kB"
     do
-        DIR_OUT="resultados/${WORKLOAD_NAME}_Exp2_Capacidade_${CAPACIDADE}"
+        DIR_OUT="resultados/${WORKLOAD_NAME}_CacheSize_Capacidade_${CAPACIDADE}"
         echo "[L1 Size] = ${CAPACIDADE}..."
         
         $GEM5_EXEC -d $DIR_OUT $SCRIPT_GEM5 \
@@ -53,7 +53,7 @@ run_tests() {
     # variaveis constantes: Linha (block size) = 64B, L1 size = 32kB
     for ASSOC in 1 2 4 8
     do
-        DIR_OUT="resultados/${WORKLOAD_NAME}_Exp3_Assoc_${ASSOC}way"
+        DIR_OUT="resultados/${WORKLOAD_NAME}_Assoc_${ASSOC}way"
         echo "[Associacao] = ${ASSOC}-way..."
         
         $GEM5_EXEC -d $DIR_OUT $SCRIPT_GEM5 \
@@ -70,7 +70,9 @@ echo " Iniciando simulacao - gem5"
 
 run_tests "BFS" "$BIN_BFS" "$ARGS_BFS"
 
-run_tests "MATRIX" "$BIN_MATRIX" "$ARGS_MATRIX"
+run_tests "MATRIX NAIVE" "$BIN_MATRIX_NAIVE" "$ARGS_MATRIX"
+
+run_tests "MATRIX OPTIMIZED" "$BIN_MATRIX_OPTIMIZED" "$ARGS_MATRIX"
 
 echo " Simulacao concluida com sucesso!"
 echo " Verifique a pasta 'resultados/' para analisar os stats.txt"
