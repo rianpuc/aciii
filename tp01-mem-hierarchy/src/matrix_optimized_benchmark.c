@@ -52,7 +52,7 @@ void multiplicarMatrizes(int **matrizA, int **matrizB, int **matrizResult, int n
             for(int j = 0; j < n; j++) { // o j vira interno
                 soma += matrizA[i][k] * matrizB[k][j]; // o acesso a matrizA eh constante, o que varia eh o indice j (linha), logo Row-Major
             }
-            matrizResult[i][j] = soma;
+            matrizResult[i][k] = soma;
         }
     }
 }
