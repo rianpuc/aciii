@@ -70,9 +70,9 @@ echo " Iniciando simulacao - gem5"
 
 run_tests "BFS" "$BIN_BFS" "$ARGS_BFS"
 
-run_tests "MATRIX NAIVE" "$BIN_MATRIX_NAIVE" "$ARGS_MATRIX"
+run_tests "MATRIX_NAIVE" "$BIN_MATRIX_NAIVE" "$ARGS_MATRIX"
 
-run_tests "MATRIX OPTIMIZED" "$BIN_MATRIX_OPTIMIZED" "$ARGS_MATRIX"
+run_tests "MATRIX_OPTIMIZED" "$BIN_MATRIX_OPTIMIZED" "$ARGS_MATRIX"
 
 echo " Simulacao concluida com sucesso!"
 echo " Verifique a pasta 'resultados/' para analisar os stats.txt"
