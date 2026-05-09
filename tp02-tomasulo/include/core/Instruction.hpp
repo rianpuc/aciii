@@ -4,7 +4,20 @@
 #include <string>
 #include <sstream>
 
-enum Opcode { ADD, SUB, MUL, DIV, LW, SW};
+enum Opcode { ADD, SUB, MUL, DIV, LW, SW };
+
+inline std::string getOpcodeName(Opcode op) {
+    switch (op) {
+        case ADD: return "ADD";
+        case SUB: return "SUB";
+        case MUL: return "MUL";
+        case DIV: return "DIV";
+        case LW:  return "LW";
+        case SW:  return "SW";
+        default:  return "UNKNOWN";
+    }
+}
+
 enum InstType { TYPE_R, TYPE_I };
 
 struct Instruction {
@@ -16,20 +29,9 @@ struct Instruction {
     int srcRegister2;
     int immediate;
     std::string rawText;  // TO SALVANDO O TEXTO ORIGINAL SO PRA DEBUGAR
-    std::string getOpcodeName() const {
-        switch (op) {
-            case ADD: return "ADD";
-            case SUB: return "SUB";
-            case MUL: return "MUL";
-            case DIV: return "DIV";
-            case LW:  return "LW";
-            case SW:  return "SW";
-            default:  return "UNKNOWN";
-        }
-    }
     std::string toString() const {
         std::stringstream ss;
-        ss << "[I" << id << "] " << getOpcodeName() <<  " -> ";
+        ss << "[I" << id << "] " << getOpcodeName(op) <<  " -> ";
         if (type == TYPE_R) {
             ss << "Dest: R" << destRegister
                << " | Src1: R" << srcRegister1

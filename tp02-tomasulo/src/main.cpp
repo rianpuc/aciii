@@ -1,18 +1,13 @@
 #include <iostream>
-#include <vector>
-
+#include "../include/core/TomasuloSimulator.hpp"
 #include "../include/utils/Logger.hpp"
 #include "../include/utils/Parser.hpp"
 #include "../include/utils/TomasuloException.hpp"
 
 int main() {
     try {
-        Logger::log(Logger::INFO, "Inicializando o simulador...");
-        std::vector<Instruction> instructions = Parser::parseFile("input.txt");
-        int cycle = 0;
-        for (auto& instruction : instructions) {
-            Logger::log(cycle++,Logger::DEBUG, instruction.toString());
-        }
+        TomasuloSimulator tomasulo = TomasuloSimulator();
+        tomasulo.run("input.txt");
     } catch (const TomasuloException& e) {
         Logger::log(Logger::ERROR, e.what());
         return 1;
