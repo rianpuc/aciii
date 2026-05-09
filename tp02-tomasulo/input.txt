@@ -1,0 +1,31 @@
+// =====================================================================
+// ARQUIVO DE TESTE: TOMASULO SIMULATOR
+// Arquitetura: 32 Registradores (R0-R31) | ISA Didatica (R-Type, I-Type)
+// =====================================================================
+
+// ---------------------------------------------------------
+// CENARIO 1: A Ultrapassagem (Out-of-Order Execution)
+// Objetivo: Provar que a SUB passa na frente da MUL e da ADD.
+// ---------------------------------------------------------
+LW R2, 100(R0)    // Traz um valor da memoria para R2
+MUL R3, R2, R4    // RAW: Precisa esperar o LW. Vai demorar muitos ciclos!
+ADD R5, R3, R6    // RAW: Fica presa na Estacao de Reserva esperando a MUL acabar.
+SUB R8, R9, R10   // INDEPENDENTE! O seu log deve mostrar essa SUB executando e terminando ANTES da MUL.
+
+// ---------------------------------------------------------
+// CENARIO 2: Renomeacao de Registradores (Register Renaming)
+// Objetivo: Provar que o WAW e o WAR nao travam o pipeline.
+// ---------------------------------------------------------
+ADD R1, R11, R12  // Escreve em R1
+SUB R15, R1, R13  // RAW: Le de R1 (espera o ADD)
+MUL R1, R16, R17  // WAW (Escreve no mesmo R1 do ADD) e WAR (Escreve no R1 que a SUB ainda quer ler).
+// O Tomasulo deve renomear esse R1 da MUL para um registrador fisico secreto.
+// A MUL nao precisa esperar a SUB terminar de ler!
+
+// ---------------------------------------------------------
+// CENARIO 3: Cascata de Memoria e Aritmetica
+// Objetivo: Testar o Parser novo lidando com Imediatos/Offsets.
+// ---------------------------------------------------------
+LW R20, 0(R21)    // Carrega um dado base
+ADD R20, R20, R22 // Modifica o dado carregado
+SW R20, 4(R21)    // Salva o resultado modificado no proximo espaco de memoria
