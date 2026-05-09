@@ -21,18 +21,16 @@ private:
     std::vector<ReservationStation> addStations;
     std::vector<ReservationStation> mulStations;
     std::vector<ReservationStation> loadStoreStations;
-public:
-    TomasuloSimulator();
-    TomasuloSimulator(int numAdd, int numMul, int numLs, int issue);
-    void printState();
-    void run(const std::string& filename);
-
-private:
     void loadInstructionsFromFile(const std::string& filename);
     void issue();
     void execute();
     void writeResult();
     void checkFinishCondition();
+public:
+    TomasuloSimulator();
+    TomasuloSimulator(int numAdd, int numMul, int numLs, int issue);
+    void printState();
+    void run(const std::string& filename);
 };
 
 #endif
