@@ -9,12 +9,25 @@
 TomasuloSimulator::TomasuloSimulator() {
     currentCycle = 0;
     isFinished = false;
+    this->issueWidth = 2;
     registerFile.resize(32, 0);
     memory.resize(1024, 0);
     int tagCounter = 1;
-    for (int i = 0; i < 3; i++) addStations.push_back(ReservationStation(tagCounter++));
-    for (int i = 0; i < 2; i++) mulStations.push_back(ReservationStation(tagCounter++));
+    for (int i = 0; i < 2; i++) addStations.push_back(ReservationStation(tagCounter++));
+    for (int i = 0; i < 1; i++) mulStations.push_back(ReservationStation(tagCounter++));
     for (int i = 0; i < 2; i++) loadStoreStations.push_back(ReservationStation(tagCounter++));
+}
+
+TomasuloSimulator::TomasuloSimulator(const int numAdd, const int numMul, const int numLs, const int issue) {
+    currentCycle = 0;
+    isFinished = false;
+    this->issueWidth = issue;
+    registerFile.resize(32, 0);
+    memory.resize(1024, 0);
+    int tagCounter = 1;
+    for (int i = 0; i < numAdd; i++) addStations.push_back(ReservationStation(tagCounter++));
+    for (int i = 0; i < numMul; i++) mulStations.push_back(ReservationStation(tagCounter++));
+    for (int i = 0; i < numLs; i++) loadStoreStations.push_back(ReservationStation(tagCounter++));
 }
 
 void TomasuloSimulator::printState() {
@@ -93,71 +106,68 @@ void TomasuloSimulator::run(const std::string& filename) {
 }
 
 void TomasuloSimulator::issue() {
-    if (instructionQueue.empty()) return;
-    Instruction inst = instructionQueue.front();
-    ReservationStation* freeRS = nullptr;
-    if (inst.op == ADD || inst.op == SUB) {
-        for (auto& rs : addStations) {
-            if (!rs.busy) { freeRS = &rs; break; }
+    int instructionsIssuedThisCycle = 0;
+    while (!instructionQueue.empty() && instructionsIssuedThisCycle < this->issueWidth) {
+        Instruction inst = instructionQueue.front();
+        ReservationStation* freeRS = nullptr;
+        if (inst.op == ADD || inst.op == SUB) {
+            for (auto& rs : addStations) if (!rs.busy) { freeRS = &rs; break; }
+        } else if (inst.op == MUL || inst.op == DIV) {
+            for (auto& rs : mulStations) if (!rs.busy) { freeRS = &rs; break; }
+        } else if (inst.op == LW || inst.op == SW) {
+            for (auto& rs : loadStoreStations) if (!rs.busy) { freeRS = &rs; break; }
         }
-    } else if (inst.op == MUL || inst.op == DIV) {
-        for (auto& rs : mulStations) {
-            if (!rs.busy) { freeRS = &rs; break; }
+        if (freeRS == nullptr) {
+            break;
         }
-    } else if (inst.op == LW || inst.op == SW) {
-        for (auto& rs : loadStoreStations) {
-            if (!rs.busy) { freeRS = &rs; break; }
+        instructionQueue.erase(instructionQueue.begin());
+        freeRS->busy = true;
+        freeRS->op = inst.op;
+        if (inst.op == ADD || inst.op == SUB) freeRS->delayTimer = 1;
+        if (inst.op == MUL) freeRS->delayTimer = 2;
+        if (inst.op == DIV) freeRS->delayTimer = 2;
+        if (inst.op == LW || inst.op == SW) freeRS->delayTimer = 2;
+        if (inst.type == TYPE_R) {
+            int producer1 = rat.getProducer(inst.srcRegister1);
+            if (producer1 == -1) {
+                freeRS->Vj = registerFile[inst.srcRegister1];
+                freeRS->Qj = 0;
+            } else {
+                freeRS->Qj = producer1;
+            }
+            int producer2 = rat.getProducer(inst.srcRegister2);
+            if (producer2 == -1) {
+                freeRS->Vk = registerFile[inst.srcRegister2];
+                freeRS->Qk = 0;
+            } else {
+                freeRS->Qk = producer2;
+            }
+            freeRS->result = inst.destRegister;
         }
+        else if (inst.type == TYPE_I) {
+            int producer1 = rat.getProducer(inst.srcRegister1);
+            if (producer1 == -1) {
+                freeRS->Vj = registerFile[inst.srcRegister1];
+                freeRS->Qj = 0;
+            } else {
+                freeRS->Qj = producer1;
+            }
+            if (inst.op == SW) {
+                int producer2 = rat.getProducer(inst.destRegister);
+                if (producer2 == -1) { freeRS->Vk = registerFile[inst.destRegister]; freeRS->Qk = 0; }
+                else { freeRS->Qk = producer2; }
+            } else {
+                freeRS->Qk = 0;
+            }
+            freeRS->A = inst.immediate;
+            freeRS->result = inst.destRegister;
+        }
+        if (inst.op != SW) {
+            rat.setProducer(inst.destRegister, freeRS->tag);
+        }
+        instructionsIssuedThisCycle++;
+        Logger::log(currentCycle, Logger::INFO, "Despacho feito: " + inst.rawText + " -> Estacao de Reserva: " + std::to_string(freeRS->tag));
     }
-    if (freeRS == nullptr) {
-        return;
-    }
-    instructionQueue.erase(instructionQueue.begin());
-    freeRS->busy = true;
-    freeRS->op = inst.op;
-    if (inst.op == ADD || inst.op == SUB) freeRS->delayTimer = 1;
-    if (inst.op == MUL) freeRS->delayTimer = 2;
-    if (inst.op == DIV) freeRS->delayTimer = 2;
-    if (inst.op == LW || inst.op == SW) freeRS->delayTimer = 2;
-    if (inst.type == TYPE_R) {
-        int producer1 = rat.getProducer(inst.srcRegister1);
-        if (producer1 == -1) {
-            freeRS->Vj = registerFile[inst.srcRegister1];
-            freeRS->Qj = 0;
-        } else {
-            freeRS->Qj = producer1;
-        }
-        int producer2 = rat.getProducer(inst.srcRegister2);
-        if (producer2 == -1) {
-            freeRS->Vk = registerFile[inst.srcRegister2];
-            freeRS->Qk = 0;
-        } else {
-            freeRS->Qk = producer2;
-        }
-        freeRS->result = inst.destRegister;
-    }
-    else if (inst.type == TYPE_I) {
-        int producer1 = rat.getProducer(inst.srcRegister1);
-        if (producer1 == -1) {
-            freeRS->Vj = registerFile[inst.srcRegister1];
-            freeRS->Qj = 0;
-        } else {
-            freeRS->Qj = producer1;
-        }
-        if (inst.op == SW) {
-            int producer2 = rat.getProducer(inst.destRegister);
-            if (producer2 == -1) { freeRS->Vk = registerFile[inst.destRegister]; freeRS->Qk = 0; }
-            else { freeRS->Qk = producer2; }
-        } else {
-            freeRS->Qk = 0;
-        }
-        freeRS->A = inst.immediate;
-        freeRS->result = inst.destRegister;
-    }
-    if (inst.op != SW) {
-        rat.setProducer(inst.destRegister, freeRS->tag);
-    }
-    Logger::log(currentCycle, Logger::INFO, "Despacho feito: " + inst.rawText + " -> Estacao de Reserva: " + std::to_string(freeRS->tag));
 }
 
 void TomasuloSimulator::execute() {

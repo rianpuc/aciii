@@ -12,6 +12,7 @@ class TomasuloSimulator {
 private:
     int currentCycle;
     bool isFinished;
+    int issueWidth;
     std::vector<Instruction> instructionQueue;
     CommonDataBus cdb;
     RegisterAliasTable rat;
@@ -22,6 +23,7 @@ private:
     std::vector<ReservationStation> loadStoreStations;
 public:
     TomasuloSimulator();
+    TomasuloSimulator(int numAdd, int numMul, int numLs, int issue);
     void printState();
     void run(const std::string& filename);
 

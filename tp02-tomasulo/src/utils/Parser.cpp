@@ -32,7 +32,6 @@ std::vector<Instruction> Parser::parseFile(const std::string& filename) {
         // transformando virgulas em espacos
         std::string parsingLine = cleanRaw;
         std::replace(parsingLine.begin(), parsingLine.end(), ',', ' ');
-
         std::stringstream ss(parsingLine);
         std::string opStr, arg1, arg2, arg3;
         // linha vazia
