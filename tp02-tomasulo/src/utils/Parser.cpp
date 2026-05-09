@@ -1,6 +1,5 @@
 #include "../../include/utils/Parser.hpp"
 #include "../../include/utils/TomasuloException.hpp"
-
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -47,7 +46,7 @@ std::vector<Instruction> Parser::parseFile(const std::string& filename) {
         if (inst.op == ADD || inst.op == SUB || inst.op == MUL || inst.op == DIV) {
             inst.type = TYPE_R;
             if (!(ss >> arg1 >> arg2 >> arg3)) {
-                throw TomasuloException("Erro na linha " + std::to_string(lineNumber) + ": Tipo R exige 3 registradores.");
+                throw TomasuloException("Erro na linha " + std::to_string(lineNumber) + ": Instrucoes tipo R exigem 3 registradores. Ex: ADD R1, R2, R3");
             }
             inst.destRegister = parseRegister(arg1, lineNumber);
             inst.srcRegister1 = parseRegister(arg2, lineNumber);
@@ -56,16 +55,20 @@ std::vector<Instruction> Parser::parseFile(const std::string& filename) {
         } else if (inst.op == LW || inst.op == SW) {
             inst.type = TYPE_I;
             if (!(ss >> arg1 >> arg2)) {
-                throw TomasuloException("Erro na linha " + std::to_string(lineNumber) + ": Tipo I exige Registrador e Offset. Ex: LW R1, 100(R2)");
+                throw TomasuloException("Erro na linha " + std::to_string(lineNumber) + ": Instrucoes tipo I exigem Registrador e Offset. Ex: LW R1, 100(R2)");
             }
             inst.destRegister = parseRegister(arg1, lineNumber);
             size_t inicioParenteses = arg2.find('(');
             size_t fimParenteses = arg2.find(')');
             if (inicioParenteses == std::string::npos || fimParenteses == std::string::npos) {
-                throw TomasuloException("Sintaxe de memoria invalida na linha " + std::to_string(lineNumber) + ". Use offset(reg).");
+                throw TomasuloException("Sintaxe de memoria invalida na linha " + std::to_string(lineNumber) + ". Use offset(reg). Ex: 100(R5)");
             }
             std::string offsetStr = arg2.substr(0, inicioParenteses);
-            inst.immediate = std::stoi(offsetStr);
+            try {
+                inst.immediate = std::stoi(offsetStr);
+            } catch (...) {
+                throw TomasuloException("Offset de memoria invalido '" + offsetStr + "' na linha " + std::to_string(lineNumber) + ". Esperado um numero inteiro entre 0 e 31 antes dos parenteses.");
+            }
             std::string baseRegStr = arg2.substr(inicioParenteses + 1, fimParenteses - inicioParenteses - 1);
             inst.srcRegister1 = parseRegister(baseRegStr, lineNumber);
             inst.srcRegister2 = -1;
@@ -84,7 +87,7 @@ Opcode Parser::parseOpcode(const std::string& opStr, int lineNumber) {
     if (opStr == "LW") return LW;
     if (opStr == "SW") return SW;
     
-    throw TomasuloException("Opcode desconhecido '" + opStr + "' na linha " + std::to_string(lineNumber));
+    throw TomasuloException("Opcode desconhecido '" + opStr + "' na linha " + std::to_string(lineNumber) + " (Opcodes disponiveis: ADD, SUB, MUL, DIV, LW, SW)");
 }
 
 int Parser::parseRegister(const std::string& regStr, int lineNumber) {
