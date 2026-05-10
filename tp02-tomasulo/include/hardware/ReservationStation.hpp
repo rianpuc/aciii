@@ -11,6 +11,7 @@ struct ReservationStation {
     int Vk;
     int Qj;
     int Qk;
+    int destROB;
     int A;
     int result;
     int delayTimer;
@@ -24,6 +25,7 @@ struct ReservationStation {
         Qj = 0; Qk = 0;
         A = 0;
         result = 0;
+        destROB = 0;
         delayTimer = -1;
     }
     bool isReady() const {

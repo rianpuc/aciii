@@ -17,6 +17,11 @@ void Logger::log(const int cycle, const Logger::Level level, const std::string& 
 }
 
 void Logger::log(const Logger::Level level, const std::string& message) {
+    log(level, message, true);
+}
+
+void Logger::log(const Logger::Level level, const std::string& message, bool breakLine) {
     const std::string levelStr = getLevelStr(level);
-    std::cout << levelStr << message << std::endl;
+    if (breakLine) std::cout << levelStr << message << std::endl;
+    else std::cout << levelStr << message;
 }

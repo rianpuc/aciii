@@ -8,6 +8,7 @@ public:
     static std::string getLevelStr(Level level);
     static void log(int cycle, Level level, const std::string& message);
     static void log(Level level, const std::string& message);
+    static void log(Level level, const std::string& message, bool breakLine);
 };
 
 #endif

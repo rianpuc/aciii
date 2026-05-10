@@ -1,9 +1,11 @@
 #ifndef TOMASULO_SIMULATOR_HPP
 #define TOMASULO_SIMULATOR_HPP
 
+#include <deque>
 #include <vector>
 #include <string>
 #include "Instruction.hpp"
+#include "../hardware/ReorderBuffer.hpp"
 #include "../hardware/CommonDataBus.hpp"
 #include "../hardware/ReservationStation.hpp"
 #include "../hardware/RegisterAliasTable.hpp"
@@ -13,6 +15,9 @@ private:
     int currentCycle;
     bool isFinished;
     int issueWidth;
+    int physicalAluAdd;
+    int physicalAluMul;
+    int physicalAluLs;
     std::vector<Instruction> instructionQueue;
     CommonDataBus cdb;
     RegisterAliasTable rat;
@@ -21,14 +26,18 @@ private:
     std::vector<ReservationStation> addStations;
     std::vector<ReservationStation> mulStations;
     std::vector<ReservationStation> loadStoreStations;
+    std::deque<ReorderBufferEntry> rob;
+    int robTagCounter = 1;
+    long long unsigned int robMaxSize = 1024;
     void loadInstructionsFromFile(const std::string& filename);
     void issue();
     void execute();
     void writeResult();
+    void commit();
     void checkFinishCondition();
 public:
     TomasuloSimulator();
-    TomasuloSimulator(int numAdd, int numMul, int numLs, int issue);
+    TomasuloSimulator(int rsAdd, int rsMul, int rsLs, int aluAdd, int aluMul, int aluLs, int issue);
     void printState();
     void run(const std::string& filename);
 };

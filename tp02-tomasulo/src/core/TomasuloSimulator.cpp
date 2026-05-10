@@ -21,32 +21,34 @@ TomasuloSimulator::TomasuloSimulator() {
     for (int i = 0; i < 2; i++) loadStoreStations.push_back(ReservationStation(tagCounter++));
 }
 
-TomasuloSimulator::TomasuloSimulator(const int numAdd, const int numMul, const int numLs, const int issue) {
+TomasuloSimulator::TomasuloSimulator(const int rsAdd, const int rsMul, const int rsLs, const int aluAdd, const int aluMul, const int aluLs, const int issue) {
     currentCycle = 0;
     isFinished = false;
+    this->physicalAluAdd = aluAdd;
+    this->physicalAluMul = aluMul;
+    this->physicalAluLs = aluLs;
     this->issueWidth = issue;
     registerFile.resize(32, 0);
     memory.resize(1024, 0);
     int tagCounter = 1;
-    for (int i = 0; i < numAdd; i++) addStations.push_back(ReservationStation(tagCounter++));
-    for (int i = 0; i < numMul; i++) mulStations.push_back(ReservationStation(tagCounter++));
-    for (int i = 0; i < numLs; i++) loadStoreStations.push_back(ReservationStation(tagCounter++));
+    for (int i = 0; i < rsAdd; i++) addStations.push_back(ReservationStation(tagCounter++));
+    for (int i = 0; i < rsMul; i++) mulStations.push_back(ReservationStation(tagCounter++));
+    for (int i = 0; i < rsLs; i++) loadStoreStations.push_back(ReservationStation(tagCounter++));
 }
 
 void TomasuloSimulator::printState() {
-    std::cout << "\n===========================================================\n";
-    std::cout << "                   ESTADO NO CICLO " << currentCycle << "\n";
-    std::cout << "===========================================================\n";
-
-    std::cout << "--- ESTACOES DE RESERVA ---\n";
+    Logger::log(Logger::DEBUG, "===========================================================");
+    Logger::log(Logger::DEBUG, "                   ESTADO NO CICLO " + std::to_string(currentCycle));
+    Logger::log(Logger::DEBUG, "===========================================================");
+    Logger::log(Logger::DEBUG, "--- ESTACOES DE RESERVA ---");
     std::cout << std::left 
               << std::setw(5) << "Tag" 
               << std::setw(6) << "Busy" 
               << std::setw(6) << "Op" 
               << std::setw(8) << "Vj" 
               << std::setw(8) << "Vk" 
-              << std::setw(6) << "Qj" 
-              << std::setw(6) << "Qk" 
+              << std::setw(8) << "Qj(ROB)"
+              << std::setw(8) << "Qk(ROB)"
               << std::setw(8) << "A" 
               << "\n";
     
@@ -58,8 +60,8 @@ void TomasuloSimulator::printState() {
                   << std::setw(6) << opName
                   << std::setw(8) << (rs.Qj == 0 && rs.busy ? std::to_string(rs.Vj) : "-") 
                   << std::setw(8) << (rs.Qk == 0 && rs.busy ? std::to_string(rs.Vk) : "-") 
-                  << std::setw(6) << (rs.Qj != 0 && rs.busy ? std::to_string(rs.Qj) : "-")
-                  << std::setw(6) << (rs.Qk != 0 && rs.busy ? std::to_string(rs.Qk) : "-")
+                  << std::setw(8) << (rs.Qj != 0 && rs.busy ? std::to_string(rs.Qj) : "-")
+                  << std::setw(8) << (rs.Qk != 0 && rs.busy ? std::to_string(rs.Qk) : "-")
                   << std::setw(8) << (rs.busy ? std::to_string(rs.A) : "-")
                   << "\n";
     };
@@ -68,12 +70,12 @@ void TomasuloSimulator::printState() {
     for (const auto& rs : mulStations) printRS(rs);
     for (const auto& rs : loadStoreStations) printRS(rs);
 
-    std::cout << "\n--- BANCO DE REGISTRADORES E RAT ---\n";
+    Logger::log(Logger::DEBUG, "--- BANCO DE REGISTRADORES E RAT ---");
     bool hasActiveRegisters = false;
     for (int i = 0; i < 32; i++) {
         int producer = rat.getProducer(i);
         if (producer != -1 || registerFile[i] != 0) {
-            std::cout << "R" << i << " -> Valor Real: " << registerFile[i];
+            Logger::log(Logger::DEBUG, "R" + std::to_string(i) + " -> Valor Real: " + std::to_string(registerFile[i]), false);
             if (producer != -1) {
                 std::cout << " | Esperando Estacao de Reserva: " << producer;
             }
@@ -81,8 +83,8 @@ void TomasuloSimulator::printState() {
             hasActiveRegisters = true;
         }
     }
-    if (!hasActiveRegisters) std::cout << "Todos os registradores limpos (Valor 0).\n";
-    std::cout << "===========================================================\n";
+    if (!hasActiveRegisters) Logger::log(Logger::DEBUG, "Todos os registradores limpos (Valor 0).");
+    Logger::log(Logger::DEBUG, "===========================================================");
 }
 
 void TomasuloSimulator::loadInstructionsFromFile(const std::string& filename) {
@@ -91,10 +93,11 @@ void TomasuloSimulator::loadInstructionsFromFile(const std::string& filename) {
 
 void TomasuloSimulator::run(const std::string& filename) {
     loadInstructionsFromFile(filename);
-    Logger::log(currentCycle, Logger::INFO, "Iniciando Simulacao de Tomasulo...");
+    Logger::log(Logger::INFO, "Iniciando Simulacao de Tomasulo...");
     printState();
     while (!isFinished) {
         currentCycle++;
+        commit();
         writeResult();
         execute();
         issue();
@@ -111,6 +114,7 @@ void TomasuloSimulator::run(const std::string& filename) {
 void TomasuloSimulator::issue() {
     int instructionsIssuedThisCycle = 0;
     while (!instructionQueue.empty() && instructionsIssuedThisCycle < this->issueWidth) {
+        if (rob.size() >= robMaxSize) break;
         Instruction inst = instructionQueue.front();
         ReservationStation* freeRS = nullptr;
         if (inst.op == ADD || inst.op == SUB) {
@@ -120,62 +124,56 @@ void TomasuloSimulator::issue() {
         } else if (inst.op == LW || inst.op == SW) {
             for (auto& rs : loadStoreStations) if (!rs.busy) { freeRS = &rs; break; }
         }
-        if (freeRS == nullptr) {
-            break;
-        }
+        if (freeRS == nullptr) break;
         instructionQueue.erase(instructionQueue.begin());
         freeRS->busy = true;
         freeRS->op = inst.op;
         if (inst.op == ADD || inst.op == SUB) freeRS->delayTimer = ADD_SUB_CYCLES;
         if (inst.op == MUL || inst.op == DIV) freeRS->delayTimer = MUL_DIV_CYCLES;
         if (inst.op == LW || inst.op == SW) freeRS->delayTimer = LW_SW_CYCLES;
+        int myRobTag = robTagCounter++;
+        rob.push_back(ReorderBufferEntry(myRobTag, inst));
+        freeRS->destROB = myRobTag;
+        auto readOperand = [&](int regNumber, int& V, int& Q) {
+            int producerRobTag = rat.getProducer(regNumber);
+            if (producerRobTag == -1) {
+                V = registerFile.at(regNumber);
+                Q = 0;
+            } else {
+                bool foundReadyInRob = false;
+                for (auto& entry : rob) {
+                    if (entry.tag == producerRobTag && entry.ready) {
+                        V = entry.value;
+                        Q = 0;
+                        foundReadyInRob = true;
+                        break;
+                    }
+                }
+                if (!foundReadyInRob) Q = producerRobTag;
+            }
+        };
         if (inst.type == TYPE_R) {
-            int producer1 = rat.getProducer(inst.srcRegister1);
-            if (producer1 == -1) {
-                freeRS->Vj = registerFile[inst.srcRegister1];
-                freeRS->Qj = 0;
-            } else {
-                freeRS->Qj = producer1;
-            }
-            int producer2 = rat.getProducer(inst.srcRegister2);
-            if (producer2 == -1) {
-                freeRS->Vk = registerFile[inst.srcRegister2];
-                freeRS->Qk = 0;
-            } else {
-                freeRS->Qk = producer2;
-            }
-            freeRS->result = inst.destRegister;
+            readOperand(inst.srcRegister1, freeRS->Vj, freeRS->Qj);
+            readOperand(inst.srcRegister2, freeRS->Vk, freeRS->Qk);
         }
         else if (inst.type == TYPE_I) {
-            int producer1 = rat.getProducer(inst.srcRegister1);
-            if (producer1 == -1) {
-                freeRS->Vj = registerFile[inst.srcRegister1];
-                freeRS->Qj = 0;
-            } else {
-                freeRS->Qj = producer1;
-            }
-            if (inst.op == SW) {
-                int producer2 = rat.getProducer(inst.destRegister);
-                if (producer2 == -1) { freeRS->Vk = registerFile[inst.destRegister]; freeRS->Qk = 0; }
-                else { freeRS->Qk = producer2; }
-            } else {
-                freeRS->Qk = 0;
-            }
+            readOperand(inst.srcRegister1, freeRS->Vj, freeRS->Qj);
+            if (inst.op == SW) readOperand(inst.destRegister, freeRS->Vk, freeRS->Qk);
+            else freeRS->Qk = 0;
             freeRS->A = inst.immediate;
-            freeRS->result = inst.destRegister;
         }
         if (inst.op != SW) {
-            rat.setProducer(inst.destRegister, freeRS->tag);
+            rat.setProducer(inst.destRegister, myRobTag);
         }
         instructionsIssuedThisCycle++;
-        Logger::log(currentCycle, Logger::INFO, "Despacho feito: " + inst.rawText + " -> Estacao de Reserva: " + std::to_string(freeRS->tag));
+        Logger::log(currentCycle, Logger::DEBUG, "Despacho feito: " + inst.rawText + " -> Estacao de Reserva: " + std::to_string(freeRS->tag));
     }
 }
 
 void TomasuloSimulator::execute() {
-    int addAlusFree = 2;
-    int mulAlusFree = 1;
-    int lsAlusFree  = 1;
+    int addAlusFree = this->physicalAluAdd;
+    int mulAlusFree = this->physicalAluMul;
+    int lsAlusFree  = this->physicalAluLs;
     auto processRS = [&](ReservationStation& rs, int& alusFree) {
         if (rs.busy && rs.Qj == 0 && rs.Qk == 0 && rs.delayTimer > 0) {
             if (alusFree > 0) {
@@ -196,7 +194,6 @@ void TomasuloSimulator::execute() {
                     else if (rs.op == SW) {
                         int addr = rs.Vj + rs.A;
                         memory[addr] = rs.Vk;
-                        rs.clear();
                     }
                 }
             }
@@ -224,16 +221,19 @@ void TomasuloSimulator::writeResult() {
     int busWidth = this->issueWidth;
     int broadcastsThisCycle = 0;
     for (ReservationStation* readyRS : readyStations) {
-        if (broadcastsThisCycle == busWidth) break;
+        if (broadcastsThisCycle >= busWidth) break;
         cdb.hasData = true;
-        cdb.sourceReservationStation = readyRS->tag;
+        cdb.sourceReservationStation = readyRS->destROB;
         cdb.resultValue = readyRS->result;
-        Logger::log(currentCycle, Logger::DEBUG, "Dado salvo no CDB! Estacao de Reserva " + std::to_string(cdb.sourceReservationStation) +
+        Logger::log(currentCycle, Logger::DEBUG, "Dado salvo no CDB! ROB Tag " + std::to_string(cdb.sourceReservationStation) +
             " finalizou com o valor: " + std::to_string(cdb.resultValue));
-        for (int i = 0; i < 32; i++) {
-            if (rat.getProducer(i) == cdb.sourceReservationStation) {
-                registerFile[i] = cdb.resultValue;
-                rat.clearDependency(i, cdb.sourceReservationStation);
+        for (auto& entry : rob) {
+            if (entry.tag == cdb.sourceReservationStation) {
+                entry.value = cdb.resultValue;
+                entry.ready = true;
+                entry.state = WRITE_RESULT;
+                if (entry.inst.op == SW) entry.destination = readyRS->Vj + readyRS->A;
+                break;
             }
         }
         auto wakeUp = [&](std::vector<ReservationStation>& stations) {
@@ -252,8 +252,35 @@ void TomasuloSimulator::writeResult() {
     }
 }
 
+void TomasuloSimulator::commit() {
+    int commitsThisCycle = 0;
+    while (!rob.empty() && commitsThisCycle < this->issueWidth) {
+        ReorderBufferEntry& head = rob.front();
+        if (!head.ready) break;
+
+        if (head.inst.op != SW) {
+            registerFile.at(head.destination) = head.value;
+            if (rat.getProducer(head.destination) == head.tag) {
+                rat.clearDependency(head.destination, head.tag);
+            }
+            Logger::log(currentCycle, Logger::DEBUG, "COMMIT! " + head.inst.rawText +
+                        " foi oficializada e gravou o valor " + std::to_string(head.value) +
+                        " no Reg R" + std::to_string(head.destination));
+        }
+        else {
+            memory.at(head.destination) = head.value;
+            Logger::log(currentCycle, Logger::DEBUG, "COMMIT! " + head.inst.rawText +
+                        " foi oficializada e gravou na RAM[" + std::to_string(head.destination) + "]");
+        }
+        head.state = COMMITTED;
+        rob.pop_front();
+        commitsThisCycle++;
+    }
+}
+
 void TomasuloSimulator::checkFinishCondition() {
     if (!instructionQueue.empty()) return;
+    if (!rob.empty()) return;
     for (const auto& rs : addStations) if (rs.busy) return;
     for (const auto& rs : mulStations) if (rs.busy) return;
     for (const auto& rs : loadStoreStations) if (rs.busy) return;
