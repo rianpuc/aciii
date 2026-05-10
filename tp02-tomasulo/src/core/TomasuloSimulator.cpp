@@ -5,6 +5,9 @@
 #include "../../include/utils/TomasuloException.hpp"
 #include <iostream>
 #include <iomanip>
+#define ADD_SUB_CYCLES 1
+#define MUL_DIV_CYCLES 2
+#define LW_SW_CYCLES 2
 
 TomasuloSimulator::TomasuloSimulator() {
     currentCycle = 0;
@@ -102,7 +105,7 @@ void TomasuloSimulator::run(const std::string& filename) {
             break;
         }
     }
-    Logger::log(currentCycle, Logger::INFO, "Simulacao Concluida.");
+    Logger::log( Logger::INFO, "Simulacao Concluida no Ciclo " + std::to_string(currentCycle));
 }
 
 void TomasuloSimulator::issue() {
@@ -123,10 +126,9 @@ void TomasuloSimulator::issue() {
         instructionQueue.erase(instructionQueue.begin());
         freeRS->busy = true;
         freeRS->op = inst.op;
-        if (inst.op == ADD || inst.op == SUB) freeRS->delayTimer = 1;
-        if (inst.op == MUL) freeRS->delayTimer = 2;
-        if (inst.op == DIV) freeRS->delayTimer = 2;
-        if (inst.op == LW || inst.op == SW) freeRS->delayTimer = 2;
+        if (inst.op == ADD || inst.op == SUB) freeRS->delayTimer = ADD_SUB_CYCLES;
+        if (inst.op == MUL || inst.op == DIV) freeRS->delayTimer = MUL_DIV_CYCLES;
+        if (inst.op == LW || inst.op == SW) freeRS->delayTimer = LW_SW_CYCLES;
         if (inst.type == TYPE_R) {
             int producer1 = rat.getProducer(inst.srcRegister1);
             if (producer1 == -1) {
@@ -171,74 +173,83 @@ void TomasuloSimulator::issue() {
 }
 
 void TomasuloSimulator::execute() {
-    auto processRS = [&](ReservationStation& rs) {
+    int addAlusFree = 2;
+    int mulAlusFree = 1;
+    int lsAlusFree  = 1;
+    auto processRS = [&](ReservationStation& rs, int& alusFree) {
         if (rs.busy && rs.Qj == 0 && rs.Qk == 0 && rs.delayTimer > 0) {
-            rs.delayTimer--;
-            if (rs.delayTimer == 0) {
-                if (rs.op == ADD) rs.result = rs.Vj + rs.Vk;
-                else if (rs.op == SUB) rs.result = rs.Vj - rs.Vk;
-                else if (rs.op == MUL) rs.result = rs.Vj * rs.Vk;
-                else if (rs.op == DIV) {
-                    if (rs.Vk == 0) throw TomasuloException("Divisao por zero na Estacao de Reserva " + std::to_string(rs.tag));
-                    rs.result = rs.Vj / rs.Vk;
-                }
-                else if (rs.op == LW) {
-                    int addr = rs.Vj + rs.A;
-                    rs.result = memory[addr];
-                }
-                else if (rs.op == SW) {
-                    int addr = rs.Vj + rs.A;
-                    memory[addr] = rs.Vk;
-                    rs.clear();
+            if (alusFree > 0) {
+                rs.delayTimer--;
+                alusFree--;
+                if (rs.delayTimer == 0) {
+                    if (rs.op == ADD) rs.result = rs.Vj + rs.Vk;
+                    else if (rs.op == SUB) rs.result = rs.Vj - rs.Vk;
+                    else if (rs.op == MUL) rs.result = rs.Vj * rs.Vk;
+                    else if (rs.op == DIV) {
+                        if (rs.Vk == 0) throw TomasuloException("Divisao por zero na Estacao de Reserva " + std::to_string(rs.tag));
+                        rs.result = rs.Vj / rs.Vk;
+                    }
+                    else if (rs.op == LW) {
+                        int addr = rs.Vj + rs.A;
+                        rs.result = memory[addr];
+                    }
+                    else if (rs.op == SW) {
+                        int addr = rs.Vj + rs.A;
+                        memory[addr] = rs.Vk;
+                        rs.clear();
+                    }
                 }
             }
         }
     };
-    for (auto& rs : addStations) processRS(rs);
-    for (auto& rs : mulStations) processRS(rs);
-    for (auto& rs : loadStoreStations) processRS(rs);
+    for (auto& rs : addStations) processRS(rs, addAlusFree);
+    for (auto& rs : mulStations) processRS(rs, mulAlusFree);
+    for (auto& rs : loadStoreStations) processRS(rs, lsAlusFree);
 }
 
 void TomasuloSimulator::writeResult() {
-    cdb.clear();
-    ReservationStation* readyRS = nullptr;
+    std::vector<ReservationStation*> readyStations;
     auto findReady = [&](std::vector<ReservationStation>& stations) {
         for (auto& rs : stations) {
             if (rs.busy && rs.delayTimer == 0) {
-                readyRS = &rs;
-                return;
+                readyStations.push_back(&rs);
             }
         }
     };
     findReady(addStations);
-    if (!readyRS) findReady(mulStations);
-    if (!readyRS) findReady(loadStoreStations);
-    if (!readyRS) return;
+    findReady(mulStations);
+    findReady(loadStoreStations);
 
-    cdb.hasData = true;
-    cdb.sourceReservationStation = readyRS->tag;
-    cdb.resultValue = readyRS->result;
-
-    Logger::log(currentCycle, Logger::DEBUG, "Dado salvo no CDB! Estacao de Reserva " + std::to_string(cdb.sourceReservationStation) +
-                " finalizou com o valor: " + std::to_string(cdb.resultValue));
-    readyRS->clear();
-    for (int i = 0; i < 32; i++) {
-        if (rat.getProducer(i) == cdb.sourceReservationStation) {
-            registerFile[i] = cdb.resultValue;
-            rat.clearDependency(i, cdb.sourceReservationStation);
-        }
-    }
-    auto wakeUp = [&](std::vector<ReservationStation>& stations) {
-        for (auto& rs : stations) {
-            if (rs.busy) {
-                if (rs.Qj == cdb.sourceReservationStation) { rs.Vj = cdb.resultValue; rs.Qj = 0; }
-                if (rs.Qk == cdb.sourceReservationStation) { rs.Vk = cdb.resultValue; rs.Qk = 0; }
+    if (readyStations.empty()) return;
+    int busWidth = this->issueWidth;
+    int broadcastsThisCycle = 0;
+    for (ReservationStation* readyRS : readyStations) {
+        if (broadcastsThisCycle == busWidth) break;
+        cdb.hasData = true;
+        cdb.sourceReservationStation = readyRS->tag;
+        cdb.resultValue = readyRS->result;
+        Logger::log(currentCycle, Logger::DEBUG, "Dado salvo no CDB! Estacao de Reserva " + std::to_string(cdb.sourceReservationStation) +
+            " finalizou com o valor: " + std::to_string(cdb.resultValue));
+        for (int i = 0; i < 32; i++) {
+            if (rat.getProducer(i) == cdb.sourceReservationStation) {
+                registerFile[i] = cdb.resultValue;
+                rat.clearDependency(i, cdb.sourceReservationStation);
             }
         }
-    };
-    wakeUp(addStations);
-    wakeUp(mulStations);
-    wakeUp(loadStoreStations);
+        auto wakeUp = [&](std::vector<ReservationStation>& stations) {
+            for (auto& rs : stations) {
+                if (rs.busy) {
+                    if (rs.Qj == cdb.sourceReservationStation) { rs.Vj = cdb.resultValue; rs.Qj = 0; }
+                    if (rs.Qk == cdb.sourceReservationStation) { rs.Vk = cdb.resultValue; rs.Qk = 0; }
+                }
+            }
+        };
+        wakeUp(addStations);
+        wakeUp(mulStations);
+        wakeUp(loadStoreStations);
+        readyRS->clear();
+        broadcastsThisCycle++;
+    }
 }
 
 void TomasuloSimulator::checkFinishCondition() {
