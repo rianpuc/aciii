@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -92,6 +93,7 @@ void exibirMenu(int& rsAdd, int& rsMul, int& rsLs, int& aluAdd, int& aluMul, int
 }
 
 int main() {
+    srand(42);
     try {
         int rsAdd = 2, rsMul = 1, rsLs = 1, aluAdd = 2, aluMul = 1, aluLs = 1, issueWidth = 2;
         std::string filename = "input.txt";

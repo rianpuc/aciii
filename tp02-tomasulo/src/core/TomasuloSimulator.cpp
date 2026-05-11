@@ -5,6 +5,8 @@
 #include "../../include/utils/TomasuloException.hpp"
 #include <iostream>
 #include <iomanip>
+#include <cstdlib>
+#define MEMORY_SIZE 1024
 #define ADD_SUB_CYCLES 1
 #define MUL_DIV_CYCLES 2
 #define LW_SW_CYCLES 2
@@ -13,9 +15,11 @@ TomasuloSimulator::TomasuloSimulator() {
     currentCycle = 0;
     isFinished = false;
     this->issueWidth = 2;
-    registerFile.resize(32, 0);
-    memory.resize(1024, 0);
     int tagCounter = 1;
+    memory.reserve(MEMORY_SIZE);
+    registerFile.reserve(32);
+    for (int i = 0; i < 32; i++) registerFile.push_back((rand() % 127) + 1);
+    for (int i = 0; i < MEMORY_SIZE; i++) memory.push_back((rand() % 255) + 1);
     for (int i = 0; i < 2; i++) addStations.push_back(ReservationStation(tagCounter++));
     for (int i = 0; i < 1; i++) mulStations.push_back(ReservationStation(tagCounter++));
     for (int i = 0; i < 2; i++) loadStoreStations.push_back(ReservationStation(tagCounter++));
@@ -28,9 +32,11 @@ TomasuloSimulator::TomasuloSimulator(const int rsAdd, const int rsMul, const int
     this->physicalAluMul = aluMul;
     this->physicalAluLs = aluLs;
     this->issueWidth = issue;
-    registerFile.resize(32, 0);
-    memory.resize(1024, 0);
     int tagCounter = 1;
+    memory.reserve(MEMORY_SIZE);
+    registerFile.reserve(32);
+    for (int i = 0; i < 32; i++) registerFile.push_back((rand() % 127) + 1);
+    for (int i = 0; i < MEMORY_SIZE; i++) memory.push_back((rand() % 255) + 1);
     for (int i = 0; i < rsAdd; i++) addStations.push_back(ReservationStation(tagCounter++));
     for (int i = 0; i < rsMul; i++) mulStations.push_back(ReservationStation(tagCounter++));
     for (int i = 0; i < rsLs; i++) loadStoreStations.push_back(ReservationStation(tagCounter++));
@@ -189,7 +195,9 @@ void TomasuloSimulator::execute() {
                     }
                     else if (rs.op == LW) {
                         int addr = rs.Vj + rs.A;
+                        std::cout << addr << std::endl;
                         rs.result = memory[addr];
+                        std::cout << rs.result << std::endl;
                     }
                     else if (rs.op == SW) {
                         int addr = rs.Vj + rs.A;
