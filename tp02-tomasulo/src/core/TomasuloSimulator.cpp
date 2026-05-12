@@ -76,21 +76,29 @@ void TomasuloSimulator::printState() {
     for (const auto& rs : mulStations) printRS(rs);
     for (const auto& rs : loadStoreStations) printRS(rs);
 
-    Logger::log(Logger::DEBUG, "--- BANCO DE REGISTRADORES E RAT ---");
-    bool hasActiveRegisters = false;
-    for (int i = 0; i < 32; i++) {
-        int producer = rat.getProducer(i);
-        if (producer != -1 || registerFile[i] != 0) {
-            Logger::log(Logger::DEBUG, "R" + std::to_string(i) + " -> Valor Real: " + std::to_string(registerFile[i]), false);
+    const int CHUNK_SIZE = 8;
+    Logger::log(Logger::DEBUG, "------------------------- STATUS DOS REGISTRADORES -------------------------");
+    for (int start = 0; start < 32; start += CHUNK_SIZE) {
+        std::stringstream headerLine, producerLine, busyLine;
+        headerLine << std::left << std::setw(12) << "Field";
+        producerLine << std::left << std::setw(12) << "Reorder #";
+        busyLine << std::left << std::setw(12) << "Busy";
+        for (int i = start; i < start + CHUNK_SIZE && i < 32; i++) {
+            headerLine << std::left << std::setw(8) << ("R" + std::to_string(i));
+            int producer = rat.getProducer(i);
             if (producer != -1) {
-                std::cout << " | Esperando Estacao de Reserva: " << producer;
+                producerLine << std::left << std::setw(8) << producer;
+                busyLine << std::left << std::setw(8) << "Yes";
+            } else {
+                producerLine << std::left << std::setw(8) << "-"; // Vazio
+                busyLine << std::left << std::setw(8) << "No";
             }
-            std::cout << "\n";
-            hasActiveRegisters = true;
         }
+        Logger::log(Logger::DEBUG, headerLine.str());
+        Logger::log(Logger::DEBUG, producerLine.str());
+        Logger::log(Logger::DEBUG, busyLine.str());
+        Logger::log(Logger::DEBUG, "----------------------------------------------------------------------------");
     }
-    if (!hasActiveRegisters) Logger::log(Logger::DEBUG, "Todos os registradores limpos (Valor 0).");
-    Logger::log(Logger::DEBUG, "===========================================================");
 }
 
 void TomasuloSimulator::loadInstructionsFromFile(const std::string& filename) {
@@ -195,9 +203,7 @@ void TomasuloSimulator::execute() {
                     }
                     else if (rs.op == LW) {
                         int addr = rs.Vj + rs.A;
-                        std::cout << addr << std::endl;
                         rs.result = memory[addr];
-                        std::cout << rs.result << std::endl;
                     }
                     else if (rs.op == SW) {
                         int addr = rs.Vj + rs.A;
