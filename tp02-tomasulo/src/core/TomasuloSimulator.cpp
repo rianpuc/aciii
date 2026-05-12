@@ -2,6 +2,7 @@
 #include "../../include/core/Instruction.hpp"
 #include "../../include/utils/Parser.hpp"
 #include "../../include/utils/Logger.hpp"
+#include "../../include/hardware/ReorderBuffer.hpp"
 #include "../../include/utils/TomasuloException.hpp"
 #include <iostream>
 #include <iomanip>
@@ -43,33 +44,63 @@ TomasuloSimulator::TomasuloSimulator(const int rsAdd, const int rsMul, const int
 }
 
 void TomasuloSimulator::printState() {
-    Logger::log(Logger::DEBUG, "===========================================================");
-    Logger::log(Logger::DEBUG, "                   ESTADO NO CICLO " + std::to_string(currentCycle));
-    Logger::log(Logger::DEBUG, "===========================================================");
-    Logger::log(Logger::DEBUG, "--- ESTACOES DE RESERVA ---");
-    std::cout << std::left 
-              << std::setw(5) << "Tag" 
-              << std::setw(6) << "Busy" 
-              << std::setw(6) << "Op" 
-              << std::setw(8) << "Vj" 
-              << std::setw(8) << "Vk" 
-              << std::setw(8) << "Qj(ROB)"
-              << std::setw(8) << "Qk(ROB)"
-              << std::setw(8) << "A" 
-              << "\n";
-    
-    auto printRS = [](const ReservationStation& rs) {
+    Logger::log(Logger::INFO, "===========================================================================");
+    Logger::log(Logger::INFO, "                            ESTADO NO CICLO " + std::to_string(currentCycle));
+    Logger::log(Logger::INFO, "===========================================================================");
+    Logger::log(Logger::INFO, "------------------------------ REORDER BUFFER ------------------------------");
+	std::stringstream robHeaders, robLine;
+	robHeaders << std::left
+               << std::setw(10) << "Entry"
+               << std::setw(10) << "Ready"
+    		   << std::setw(20) << "Instruction"
+			   << std::setw(20) << "State"
+    		   << std::setw(20) << "Destination"
+			   << std::setw(10) << "Value";
+	Logger::log(Logger::INFO, robHeaders.str());
+	if (!rob.empty()){
+		for(auto& entry : rob){
+			robLine << std::left
+			    	<< std::setw(10) << std::to_string(entry.tag)
+					<< std::setw(10) << (entry.ready ? "Yes" : "No")
+			   		<< std::setw(20) << entry.inst.rawText
+					<< std::setw(20) << getStateName(entry.state)
+					<< std::setw(20) << ("R" + std::to_string(entry.destination));
+			Logger::log(Logger::INFO, robLine.str());
+	    	robLine.str("");
+        	robLine.clear();
+		}
+	} else {
+		Logger::log(Logger::INFO, "");
+	    Logger::log(Logger::INFO, "");
+	}
+    Logger::log(Logger::INFO, "--------------------------- ESTACOES DE RESERVA ---------------------------");
+    std::stringstream rsHeaders, rsLine;
+    rsHeaders << std::left
+              << std::setw(8) << "Name"
+              << std::setw(8) << "Busy"
+              << std::setw(8) << "Op"
+              << std::setw(8) << "Vj"
+              << std::setw(8) << "Vk"
+              << std::setw(8) << "Qj"
+              << std::setw(8) << "Qk"
+              << std::setw(8) << "Dest"
+              << std::setw(8) << "A";
+    Logger::log(Logger::INFO, rsHeaders.str());
+    auto printRS = [&rsLine](const ReservationStation& rs) {
+        rsLine.str("");
+        rsLine.clear();
         std::string opName = rs.busy ? getOpcodeName(rs.op) : "-";
-        std::cout << std::left 
-                  << std::setw(5) << rs.tag 
-                  << std::setw(6) << (rs.busy ? "Sim" : "Nao")
-                  << std::setw(6) << opName
-                  << std::setw(8) << (rs.Qj == 0 && rs.busy ? std::to_string(rs.Vj) : "-") 
-                  << std::setw(8) << (rs.Qk == 0 && rs.busy ? std::to_string(rs.Vk) : "-") 
+        rsLine << std::left
+                  << std::setw(8) << rs.tag
+                  << std::setw(8) << (rs.busy ? "Sim" : "Nao")
+                  << std::setw(8) << opName
+                  << std::setw(8) << (rs.Qj == 0 && rs.busy ? std::to_string(rs.Vj) : "-")
+                  << std::setw(8) << (rs.Qk == 0 && rs.busy ? std::to_string(rs.Vk) : "-")
                   << std::setw(8) << (rs.Qj != 0 && rs.busy ? std::to_string(rs.Qj) : "-")
                   << std::setw(8) << (rs.Qk != 0 && rs.busy ? std::to_string(rs.Qk) : "-")
-                  << std::setw(8) << (rs.busy ? std::to_string(rs.A) : "-")
-                  << "\n";
+                  << std::setw(8) << (rs.destROB != 0 && rs.busy ? std::to_string(rs.destROB) : "-")
+                  << std::setw(8) << (rs.busy ? std::to_string(rs.A) : "-");
+        Logger::log(Logger::INFO, rsLine.str());
     };
 
     for (const auto& rs : addStations) printRS(rs);
@@ -77,7 +108,7 @@ void TomasuloSimulator::printState() {
     for (const auto& rs : loadStoreStations) printRS(rs);
 
     const int CHUNK_SIZE = 8;
-    Logger::log(Logger::DEBUG, "------------------------- STATUS DOS REGISTRADORES -------------------------");
+    Logger::log(Logger::INFO, "------------------------- STATUS DOS REGISTRADORES -------------------------");
     for (int start = 0; start < 32; start += CHUNK_SIZE) {
         std::stringstream headerLine, producerLine, busyLine;
         headerLine << std::left << std::setw(12) << "Field";
@@ -90,14 +121,14 @@ void TomasuloSimulator::printState() {
                 producerLine << std::left << std::setw(8) << producer;
                 busyLine << std::left << std::setw(8) << "Yes";
             } else {
-                producerLine << std::left << std::setw(8) << "-"; // Vazio
+                producerLine << std::left << std::setw(8) << "-";
                 busyLine << std::left << std::setw(8) << "No";
             }
         }
-        Logger::log(Logger::DEBUG, headerLine.str());
-        Logger::log(Logger::DEBUG, producerLine.str());
-        Logger::log(Logger::DEBUG, busyLine.str());
-        Logger::log(Logger::DEBUG, "----------------------------------------------------------------------------");
+        Logger::log(Logger::INFO, headerLine.str());
+        Logger::log(Logger::INFO, producerLine.str());
+        Logger::log(Logger::INFO, busyLine.str());
+        Logger::log(Logger::INFO, "----------------------------------------------------------------------------");
     }
 }
 
@@ -108,7 +139,6 @@ void TomasuloSimulator::loadInstructionsFromFile(const std::string& filename) {
 void TomasuloSimulator::run(const std::string& filename) {
     loadInstructionsFromFile(filename);
     Logger::log(Logger::INFO, "Iniciando Simulacao de Tomasulo...");
-    printState();
     while (!isFinished) {
         currentCycle++;
         commit();
@@ -122,7 +152,7 @@ void TomasuloSimulator::run(const std::string& filename) {
             break;
         }
     }
-    Logger::log( Logger::INFO, "Simulacao Concluida no Ciclo " + std::to_string(currentCycle));
+    Logger::log(Logger::INFO, "Simulacao Concluida no Ciclo " + std::to_string(currentCycle));
 }
 
 void TomasuloSimulator::issue() {

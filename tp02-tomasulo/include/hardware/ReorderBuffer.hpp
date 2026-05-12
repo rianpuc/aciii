@@ -3,6 +3,16 @@
 #include "../core/Instruction.hpp"
 enum RobState { ISSUE, EXECUTE, WRITE_RESULT, COMMITTED };
 
+inline std::string getStateName(RobState state) {
+    switch (state) {
+        case ISSUE: return "Issue";
+        case EXECUTE: return "Execute";
+        case WRITE_RESULT: return "Write result";
+        case COMMITTED: return "Committed";
+        default: return "Unknown";
+    }
+}
+
 struct ReorderBufferEntry {
     int tag;
     Instruction inst;
