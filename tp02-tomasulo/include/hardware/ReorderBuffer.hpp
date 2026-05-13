@@ -20,8 +20,9 @@ struct ReorderBufferEntry {
     int destination;
     int value;
     bool ready;
+    std::string valueLine;
     ReorderBufferEntry(int t, Instruction i) 
-        : tag(t), inst(i), state(ISSUE), destination(i.destRegister), value(0), ready(false) {}
+        : tag(t), inst(i), state(ISSUE), destination(i.destRegister), value(0), ready(false), valueLine("") {}
     std::string getStateName() {
         switch (this->state) {
             case ISSUE: return "Issue";

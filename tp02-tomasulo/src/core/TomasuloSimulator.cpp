@@ -156,7 +156,6 @@ void TomasuloSimulator::run(const std::string& filename) {
 
 void TomasuloSimulator::issue() {
     while (!instructionQueue.empty()) {
-        if (rob.size() >= robMaxSize) break;
         Instruction inst = instructionQueue.front();
         ReservationStation* freeRS = nullptr;
         if (inst.op == ADD || inst.op == SUB) {
@@ -293,8 +292,7 @@ void TomasuloSimulator::writeResult() {
 }
 
 void TomasuloSimulator::commit() {
-    int commitsThisCycle = 0;
-    while (!rob.empty() && commitsThisCycle < this->issueWidth) {
+    while (!rob.empty()) {
         ReorderBufferEntry& head = rob.front();
         if (!head.ready) break;
 
@@ -314,7 +312,6 @@ void TomasuloSimulator::commit() {
         }
         head.state = COMMITTED;
         rob.pop_front();
-        commitsThisCycle++;
     }
 }
 

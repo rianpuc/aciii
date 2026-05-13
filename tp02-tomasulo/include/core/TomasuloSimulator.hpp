@@ -29,7 +29,6 @@ private:
     std::vector<ReservationStation> loadStoreStations;
     std::deque<ReorderBufferEntry> rob;
     int robTagCounter = 1;
-    long long unsigned int robMaxSize = 1024;
     void loadInstructionsFromFile(const std::string& filename);
     void issue();
     void execute();
@@ -37,7 +36,6 @@ private:
     void commit();
     void checkFinishCondition();
 public:
-    TomasuloSimulator();
     TomasuloSimulator(int rsAdd, int rsMul, int rsLs, int aluAdd, int aluMul, int aluLs, int issue);
     void printState();
     void run(const std::string& filename);

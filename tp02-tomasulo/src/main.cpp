@@ -13,7 +13,7 @@ namespace fs = std::filesystem;
 void exibirMenu(int& rsAdd, int& rsMul, int& rsLs, int& aluAdd, int& aluMul, int& aluLs, int& issueWidth, std::string& filename) {
     std::string input;
     Logger::log(Logger::INFO, "========================================================");
-    Logger::log(Logger::INFO, "          SIMULADOR TOMASULO");
+    Logger::log(Logger::INFO, "             SIMULADOR TOMASULO");
     Logger::log(Logger::INFO, "========================================================");
     Logger::log(Logger::INFO, "Pressione ENTER para manter os valores padrao.");
     Logger::log(Logger::INFO, "1. Quantidade de Estacoes ADD/SUB (Padrao: 2): ");
@@ -79,7 +79,6 @@ void exibirMenu(int& rsAdd, int& rsMul, int& rsLs, int& aluAdd, int& aluMul, int
         std::getline(std::cin, input);
         if (!input.empty()) filename = input;
     }
-
     Logger::log(Logger::INFO, "========================================================");
     Logger::log(Logger::INFO, "Inicializando simulacao com " + std::to_string(rsAdd) + " Estacoes ADD/SUB, " + std::to_string(rsMul)
         + " Estacoes MUL/DIV, " + std::to_string(rsLs) + " Estacoes LW/SW");
