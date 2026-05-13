@@ -53,7 +53,7 @@ void TomasuloSimulator::printState() {
                << std::setw(10) << "Ready"
     		   << std::setw(20) << "Instruction"
 			   << std::setw(20) << "State"
-    		   << std::setw(20) << "Destination"
+    		   << std::setw(10) << "Dest"
 			   << std::setw(10) << "Value";
 	Logger::log(Logger::INFO, robHeaders.str());
 	if (!rob.empty()){
@@ -73,7 +73,7 @@ void TomasuloSimulator::printState() {
 					<< std::setw(10) << (entry.ready ? "Yes" : "No")
 			   		<< std::setw(20) << entry.inst.rawText
 					<< std::setw(20) << entry.getStateName()
-					<< std::setw(20) << ("R" + std::to_string(entry.destination))
+					<< std::setw(10) << ("R" + std::to_string(entry.destination))
 					<< std::setw(10) << valueLine.str();
 			Logger::log(Logger::INFO, robLine.str());
 	    	robLine.str("");
@@ -83,7 +83,6 @@ void TomasuloSimulator::printState() {
 		}
 	} else {
 		Logger::log(Logger::INFO, "");
-	    Logger::log(Logger::INFO, "");
 	}
     Logger::log(Logger::INFO, "--------------------------- ESTACOES DE RESERVA ---------------------------");
     std::stringstream rsHeaders, rsLine;
