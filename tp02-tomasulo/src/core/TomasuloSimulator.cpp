@@ -2,7 +2,6 @@
 #include "../../include/core/Instruction.hpp"
 #include "../../include/utils/Parser.hpp"
 #include "../../include/utils/Logger.hpp"
-#include "../../include/hardware/ReorderBuffer.hpp"
 #include "../../include/utils/TomasuloException.hpp"
 #include <iostream>
 #include <iomanip>
@@ -59,15 +58,28 @@ void TomasuloSimulator::printState() {
 	Logger::log(Logger::INFO, robHeaders.str());
 	if (!rob.empty()){
 		for(auto& entry : rob){
+			std::stringstream valueLine;
+			if (entry.inst.type == TYPE_I){
+				valueLine << ("Mem[" + std::to_string(entry.inst.immediate) + " + R" + std::to_string(entry.inst.srcRegister1) + "]");
+			} else {
+				int valueRegister1 = rat.getProducer(entry.inst.srcRegister1);
+				int valueRegister2 = rat.getProducer(entry.inst.srcRegister2);
+				std::string srcReg1 = valueRegister1 == -1 ? "R" + std::to_string(entry.inst.srcRegister1) : "#" + std::to_string(valueRegister1);
+				std::string srcReg2 = valueRegister2 == -1 ? "R" + std::to_string(entry.inst.srcRegister2) : "#" + std::to_string(valueRegister2);
+				valueLine << (srcReg1 + " " + entry.inst.getOperator() + " " + srcReg2);
+			}
 			robLine << std::left
 			    	<< std::setw(10) << std::to_string(entry.tag)
 					<< std::setw(10) << (entry.ready ? "Yes" : "No")
 			   		<< std::setw(20) << entry.inst.rawText
-					<< std::setw(20) << getStateName(entry.state)
-					<< std::setw(20) << ("R" + std::to_string(entry.destination));
+					<< std::setw(20) << entry.getStateName()
+					<< std::setw(20) << ("R" + std::to_string(entry.destination))
+					<< std::setw(10) << valueLine.str();
 			Logger::log(Logger::INFO, robLine.str());
 	    	robLine.str("");
+			valueLine.str("");
         	robLine.clear();
+			valueLine.clear();
 		}
 	} else {
 		Logger::log(Logger::INFO, "");

@@ -29,6 +29,15 @@ struct Instruction {
     int srcRegister2;
     int immediate;
     std::string rawText;  // TO SALVANDO O TEXTO ORIGINAL SO PRA DEBUGAR
+    std::string getOperator() {
+        switch (op) {
+            case ADD: return "+";
+            case SUB: return "-";
+            case MUL: return "x";
+            case DIV: return "/";
+            default: return "";
+        }
+    }
     std::string toString() const {
         std::stringstream ss;
         ss << "[I" << id << "] " << getOpcodeName(op) <<  " -> ";

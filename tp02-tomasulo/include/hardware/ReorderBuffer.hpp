@@ -22,6 +22,15 @@ struct ReorderBufferEntry {
     bool ready;
     ReorderBufferEntry(int t, Instruction i) 
         : tag(t), inst(i), state(ISSUE), destination(i.destRegister), value(0), ready(false) {}
+    std::string getStateName() {
+        switch (this->state) {
+            case ISSUE: return "Issue";
+            case EXECUTE: return "Execute";
+            case WRITE_RESULT: return "Write result";
+            case COMMITTED: return "Committed";
+            default: return "Unknown";
+        }
+    }
 };
 
 #endif
