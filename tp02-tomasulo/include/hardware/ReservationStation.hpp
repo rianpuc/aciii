@@ -4,7 +4,7 @@
 #include "../core/Instruction.hpp"
 
 struct ReservationStation {
-    int tag;
+    std::string tag;
     bool busy;
     Opcode op;
     int Vj;
@@ -15,7 +15,7 @@ struct ReservationStation {
     int A;
     int result;
     int delayTimer;
-    ReservationStation(int t) : tag(t) {
+    ReservationStation(std::string t) : tag(t) {
         clear();
     }
     void clear() {

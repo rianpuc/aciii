@@ -8,6 +8,7 @@
 #include "../hardware/ReorderBuffer.hpp"
 #include "../hardware/CommonDataBus.hpp"
 #include "../hardware/ReservationStation.hpp"
+#include "../hardware/FunctionalUnit.hpp"
 #include "../hardware/RegisterAliasTable.hpp"
 
 class TomasuloSimulator {
@@ -15,9 +16,9 @@ private:
     int currentCycle;
     bool isFinished;
     int issueWidth;
-    int physicalAluAdd;
-    int physicalAluMul;
-    int physicalAluLs;
+    std::vector<FunctionalUnit> fuAluAdd;
+    std::vector<FunctionalUnit> fuAluMul;
+    std::vector<FunctionalUnit> fuAluLS;
     std::vector<Instruction> instructionQueue;
     CommonDataBus cdb;
     RegisterAliasTable rat;

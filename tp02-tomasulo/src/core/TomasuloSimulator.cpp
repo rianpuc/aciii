@@ -1,3 +1,4 @@
+#include "../../include/hardware/FunctionalUnit.hpp"
 #include "../../include/core/TomasuloSimulator.hpp"
 #include "../../include/core/Instruction.hpp"
 #include "../../include/utils/Parser.hpp"
@@ -5,41 +6,28 @@
 #include "../../include/utils/TomasuloException.hpp"
 #include <iostream>
 #include <iomanip>
-#include <cstdlib>
 #define MEMORY_SIZE 1024
 #define ADD_SUB_CYCLES 1
 #define MUL_DIV_CYCLES 2
 #define LW_SW_CYCLES 2
 
-TomasuloSimulator::TomasuloSimulator() {
-    currentCycle = 0;
-    isFinished = false;
-    this->issueWidth = 2;
-    int tagCounter = 1;
-    memory.reserve(MEMORY_SIZE);
-    registerFile.reserve(32);
-    for (int i = 0; i < 32; i++) registerFile.push_back((rand() % 127) + 1);
-    for (int i = 0; i < MEMORY_SIZE; i++) memory.push_back((rand() % 255) + 1);
-    for (int i = 0; i < 2; i++) addStations.push_back(ReservationStation(tagCounter++));
-    for (int i = 0; i < 1; i++) mulStations.push_back(ReservationStation(tagCounter++));
-    for (int i = 0; i < 2; i++) loadStoreStations.push_back(ReservationStation(tagCounter++));
-}
-
 TomasuloSimulator::TomasuloSimulator(const int rsAdd, const int rsMul, const int rsLs, const int aluAdd, const int aluMul, const int aluLs, const int issue) {
     currentCycle = 0;
     isFinished = false;
-    this->physicalAluAdd = aluAdd;
-    this->physicalAluMul = aluMul;
-    this->physicalAluLs = aluLs;
     this->issueWidth = issue;
-    int tagCounter = 1;
     memory.reserve(MEMORY_SIZE);
+	fuAluAdd.reserve(aluAdd);
+	fuAluMul.reserve(aluMul);
+	fuAluLS.reserve(aluLs);
     registerFile.reserve(32);
     for (int i = 0; i < 32; i++) registerFile.push_back((rand() % 127) + 1);
+	for (int i = 0; i < aluAdd; i++) fuAluAdd.push_back(FunctionalUnit("ADD" + std::to_string(i+1), ADD_SUB_CYCLES));
+	for (int i = 0; i < aluMul; i++) fuAluMul.push_back(FunctionalUnit("MUL" + std::to_string(i+1), MUL_DIV_CYCLES));
+	for (int i = 0; i < aluLs; i++) fuAluLS.push_back(FunctionalUnit("LS" + std::to_string(i+1), LW_SW_CYCLES));
     for (int i = 0; i < MEMORY_SIZE; i++) memory.push_back((rand() % 255) + 1);
-    for (int i = 0; i < rsAdd; i++) addStations.push_back(ReservationStation(tagCounter++));
-    for (int i = 0; i < rsMul; i++) mulStations.push_back(ReservationStation(tagCounter++));
-    for (int i = 0; i < rsLs; i++) loadStoreStations.push_back(ReservationStation(tagCounter++));
+    for (int i = 0; i < rsAdd; i++) addStations.push_back(ReservationStation("rsAdd" + std::to_string(i+1)));
+    for (int i = 0; i < rsMul; i++) mulStations.push_back(ReservationStation("rsMul" + std::to_string(i+1)));
+    for (int i = 0; i < rsLs; i++) loadStoreStations.push_back(ReservationStation("rsLS" + std::to_string(i+1)));
 }
 
 void TomasuloSimulator::printState() {
@@ -167,8 +155,7 @@ void TomasuloSimulator::run(const std::string& filename) {
 }
 
 void TomasuloSimulator::issue() {
-    int instructionsIssuedThisCycle = 0;
-    while (!instructionQueue.empty() && instructionsIssuedThisCycle < this->issueWidth) {
+    while (!instructionQueue.empty()) {
         if (rob.size() >= robMaxSize) break;
         Instruction inst = instructionQueue.front();
         ReservationStation* freeRS = nullptr;
@@ -183,9 +170,6 @@ void TomasuloSimulator::issue() {
         instructionQueue.erase(instructionQueue.begin());
         freeRS->busy = true;
         freeRS->op = inst.op;
-        if (inst.op == ADD || inst.op == SUB) freeRS->delayTimer = ADD_SUB_CYCLES;
-        if (inst.op == MUL || inst.op == DIV) freeRS->delayTimer = MUL_DIV_CYCLES;
-        if (inst.op == LW || inst.op == SW) freeRS->delayTimer = LW_SW_CYCLES;
         int myRobTag = robTagCounter++;
         rob.push_back(ReorderBufferEntry(myRobTag, inst));
         freeRS->destROB = myRobTag;
@@ -220,90 +204,91 @@ void TomasuloSimulator::issue() {
         if (inst.op != SW) {
             rat.setProducer(inst.destRegister, myRobTag);
         }
-        instructionsIssuedThisCycle++;
-        Logger::log(currentCycle, Logger::DEBUG, "Despacho feito: " + inst.rawText + " -> Estacao de Reserva: " + std::to_string(freeRS->tag));
+        Logger::log(currentCycle, Logger::DEBUG, "Nova instrucao: " + inst.rawText + " -> Estacao de Reserva: " + freeRS->tag);
     }
 }
 
 void TomasuloSimulator::execute() {
-    int addAlusFree = this->physicalAluAdd;
-    int mulAlusFree = this->physicalAluMul;
-    int lsAlusFree  = this->physicalAluLs;
-    auto processRS = [&](ReservationStation& rs, int& alusFree) {
-        if (rs.busy && rs.Qj == 0 && rs.Qk == 0 && rs.delayTimer > 0) {
-            if (alusFree > 0) {
-                rs.delayTimer--;
-                alusFree--;
-                if (rs.delayTimer == 0) {
-                    if (rs.op == ADD) rs.result = rs.Vj + rs.Vk;
-                    else if (rs.op == SUB) rs.result = rs.Vj - rs.Vk;
-                    else if (rs.op == MUL) rs.result = rs.Vj * rs.Vk;
-                    else if (rs.op == DIV) {
-                        if (rs.Vk == 0) throw TomasuloException("Divisao por zero na Estacao de Reserva " + std::to_string(rs.tag));
-                        rs.result = rs.Vj / rs.Vk;
-                    }
-                    else if (rs.op == LW) {
-                        int addr = rs.Vj + rs.A;
-                        rs.result = memory[addr];
-                    }
-                    else if (rs.op == SW) {
-                        int addr = rs.Vj + rs.A;
-                        memory[addr] = rs.Vk;
-                    }
-                }
+	for (auto& fu : fuAluAdd) fu.tick();
+    for (auto& fu : fuAluMul) fu.tick();
+    for (auto& fu : fuAluLS)  fu.tick();
+	auto getFreeFU = [](std::vector<FunctionalUnit>& alus) -> FunctionalUnit* {
+        for (auto& fu : alus) {
+            if (!fu.busy) return &fu;
+        }
+        return nullptr;
+    };
+	auto tryDispatch = [&](ReservationStation& rs, std::vector<FunctionalUnit>& alus) {
+        if (rs.busy && rs.Qj == 0 && rs.Qk == 0) {
+            FunctionalUnit* freeFU = getFreeFU(alus);
+            if (freeFU != nullptr) {
+                int v2 = (rs.op == LW || rs.op == SW) ? rs.A : rs.Vk;
+                freeFU->dispatch(rs.op, rs.Vj, v2, rs.destROB);
+				Logger::log(currentCycle, Logger::DEBUG, "Instrucao despachada: " + rs.tag + " -> Functional Unit: " + freeFU->tag);
+                rs.clear();
             }
         }
     };
-    for (auto& rs : addStations) processRS(rs, addAlusFree);
-    for (auto& rs : mulStations) processRS(rs, mulAlusFree);
-    for (auto& rs : loadStoreStations) processRS(rs, lsAlusFree);
+	for (auto& rs : addStations) tryDispatch(rs, fuAluAdd);
+    for (auto& rs : mulStations) tryDispatch(rs, fuAluMul);
+    for (auto& rs : loadStoreStations) tryDispatch(rs, fuAluLS);
 }
 
 void TomasuloSimulator::writeResult() {
-    std::vector<ReservationStation*> readyStations;
-    auto findReady = [&](std::vector<ReservationStation>& stations) {
-        for (auto& rs : stations) {
-            if (rs.busy && rs.delayTimer == 0) {
-                readyStations.push_back(&rs);
+    std::vector<FunctionalUnit*> readyFUS;
+    auto findReady = [&](std::vector<FunctionalUnit>& fus) {
+        for (auto& fu : fus) {
+            if (fu.resultReady && fu.cyclesLeft == 0) {
+                readyFUS.push_back(&fu);
             }
         }
     };
-    findReady(addStations);
-    findReady(mulStations);
-    findReady(loadStoreStations);
-
-    if (readyStations.empty()) return;
-    int busWidth = this->issueWidth;
-    int broadcastsThisCycle = 0;
-    for (ReservationStation* readyRS : readyStations) {
-        if (broadcastsThisCycle >= busWidth) break;
-        cdb.hasData = true;
-        cdb.sourceReservationStation = readyRS->destROB;
-        cdb.resultValue = readyRS->result;
-        Logger::log(currentCycle, Logger::DEBUG, "Dado salvo no CDB! ROB Tag " + std::to_string(cdb.sourceReservationStation) +
-            " finalizou com o valor: " + std::to_string(cdb.resultValue));
+    findReady(fuAluAdd);
+    findReady(fuAluMul);
+    findReady(fuAluLS);
+    if (readyFUS.empty()) return;
+    for (FunctionalUnit* readyFU : readyFUS) {
+		int finalBroadcastValue = readyFU->result;
+        bool broadcastToCDB = true;
+		if (readyFU->op == LW) {
+            int address = readyFU->result;
+            finalBroadcastValue = memory[address];
+        }
+        else if (readyFU->op == SW) {
+            broadcastToCDB = false;
+        }
         for (auto& entry : rob) {
-            if (entry.tag == cdb.sourceReservationStation) {
-                entry.value = cdb.resultValue;
+            if (entry.tag == readyFU->destTag) {
                 entry.ready = true;
                 entry.state = WRITE_RESULT;
-                if (entry.inst.op == SW) entry.destination = readyRS->Vj + readyRS->A;
+                if (readyFU->op == SW) entry.destination = readyFU->result;
+				else entry.value = finalBroadcastValue;
                 break;
             }
         }
-        auto wakeUp = [&](std::vector<ReservationStation>& stations) {
-            for (auto& rs : stations) {
-                if (rs.busy) {
-                    if (rs.Qj == cdb.sourceReservationStation) { rs.Vj = cdb.resultValue; rs.Qj = 0; }
-                    if (rs.Qk == cdb.sourceReservationStation) { rs.Vk = cdb.resultValue; rs.Qk = 0; }
+		if (broadcastToCDB) {
+            cdb.hasData = true;
+            cdb.sourceReservationStation = readyFU->destTag;
+            cdb.resultValue = finalBroadcastValue;
+            Logger::log(currentCycle, Logger::DEBUG, "Dado salvo no CDB! " +
+                readyFU->tag +
+                " finalizou com o valor: " + std::to_string(cdb.resultValue));
+            auto wakeUp = [&](std::vector<ReservationStation>& stations) {
+                for (auto& rs : stations) {
+                    if (rs.busy) {
+                        if (rs.Qj == cdb.sourceReservationStation) { rs.Vj = cdb.resultValue; rs.Qj = 0; }
+                        if (rs.Qk == cdb.sourceReservationStation) { rs.Vk = cdb.resultValue; rs.Qk = 0; }
+                    }
                 }
-            }
-        };
-        wakeUp(addStations);
-        wakeUp(mulStations);
-        wakeUp(loadStoreStations);
-        readyRS->clear();
-        broadcastsThisCycle++;
+            };
+            wakeUp(addStations);
+            wakeUp(mulStations);
+            wakeUp(loadStoreStations);
+        } else {
+            Logger::log(currentCycle, Logger::DEBUG, "SW Tag " + std::to_string(readyFU->destTag) +
+                " calculou o endereço e aguarda no ROB.");
+        }
+        readyFU->clear();
     }
 }
 
