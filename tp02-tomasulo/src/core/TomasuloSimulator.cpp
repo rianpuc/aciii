@@ -46,28 +46,42 @@ void TomasuloSimulator::printState() {
 	Logger::log(Logger::INFO, robHeaders.str());
 	if (!rob.empty()){
 		for(auto& entry : rob){
-			std::stringstream valueLine;
-			if (entry.inst.type == TYPE_I){
-				valueLine << ("Mem[" + std::to_string(entry.inst.immediate) + " + R" + std::to_string(entry.inst.srcRegister1) + "]");
-			} else {
-				int valueRegister1 = rat.getProducer(entry.inst.srcRegister1);
-				int valueRegister2 = rat.getProducer(entry.inst.srcRegister2);
-				std::string srcReg1 = valueRegister1 == -1 ? "R" + std::to_string(entry.inst.srcRegister1) : "#" + std::to_string(valueRegister1);
-				std::string srcReg2 = valueRegister2 == -1 ? "R" + std::to_string(entry.inst.srcRegister2) : "#" + std::to_string(valueRegister2);
-				valueLine << (srcReg1 + " " + entry.inst.getOperator() + " " + srcReg2);
-			}
-			robLine << std::left
-			    	<< std::setw(10) << std::to_string(entry.tag)
-					<< std::setw(10) << (entry.ready ? "Yes" : "No")
-			   		<< std::setw(20) << entry.inst.rawText
-					<< std::setw(20) << entry.getStateName()
-					<< std::setw(10) << ("R" + std::to_string(entry.destination))
-					<< std::setw(10) << valueLine.str();
-			Logger::log(Logger::INFO, robLine.str());
-	    	robLine.str("");
-			valueLine.str("");
-        	robLine.clear();
-			valueLine.clear();
+		    std::string statusStr = "";
+            ReservationStation* myRS = nullptr;
+            auto findRS = [&](std::vector<ReservationStation>& stations) {
+                for (auto& rs : stations) {
+                    if (rs.busy && rs.destROB == entry.tag) myRS = &rs;
+                }
+            };
+            findRS(addStations);
+            findRS(mulStations);
+            findRS(loadStoreStations);
+            if (myRS != nullptr) {
+                if (entry.inst.type == TYPE_I) {
+                    std::string arg1 = (myRS->Qj == 0) ? "R" + std::to_string(entry.inst.srcRegister1) : "#" + std::to_string(myRS->Qj);
+                    statusStr = "Mem[" + std::to_string(entry.inst.immediate) + " + " + arg1 + "]";
+                } else {
+                    std::string arg1 = (myRS->Qj == 0) ? "R" + std::to_string(entry.inst.srcRegister1) : "#" + std::to_string(myRS->Qj);
+                    std::string arg2 = (myRS->Qk == 0) ? "R" + std::to_string(entry.inst.srcRegister2) : "#" + std::to_string(myRS->Qk);
+                    statusStr = arg1 + " " + entry.inst.getOperator() + " " + arg2;
+                }
+            } else {
+                if (entry.inst.type == TYPE_I) {
+                    statusStr = "Mem[" + std::to_string(entry.inst.immediate) + " + R" + std::to_string(entry.inst.srcRegister1) + "]";
+                } else {
+                    statusStr = "R" + std::to_string(entry.inst.srcRegister1) + " " + entry.inst.getOperator() + " R" + std::to_string(entry.inst.srcRegister2);
+                }
+            }
+            robLine << std::left
+                    << std::setw(10) << std::to_string(entry.tag)
+                    << std::setw(10) << (entry.ready ? "Yes" : "No")
+                    << std::setw(20) << entry.inst.rawText
+                    << std::setw(20) << entry.getStateName()
+                    << std::setw(10) << (entry.inst.op == SW ? "-" : "R" + std::to_string(entry.destination))
+                    << std::setw(15) << statusStr;
+            Logger::log(Logger::INFO, robLine.str());
+            robLine.str("");
+            robLine.clear();
 		}
 	} else {
 		Logger::log(Logger::INFO, "");
@@ -91,14 +105,14 @@ void TomasuloSimulator::printState() {
         std::string opName = rs.busy ? getOpcodeName(rs.op) : "-";
         rsLine << std::left
                   << std::setw(8) << rs.tag
-                  << std::setw(8) << (rs.busy ? "Sim" : "Nao")
+                  << std::setw(8) << (rs.busy ? "Yes" : "No")
                   << std::setw(8) << opName
                   << std::setw(8) << (rs.Qj == 0 && rs.busy ? std::to_string(rs.Vj) : "-")
                   << std::setw(8) << (rs.Qk == 0 && rs.busy ? std::to_string(rs.Vk) : "-")
-                  << std::setw(8) << (rs.Qj != 0 && rs.busy ? std::to_string(rs.Qj) : "-")
-                  << std::setw(8) << (rs.Qk != 0 && rs.busy ? std::to_string(rs.Qk) : "-")
-                  << std::setw(8) << (rs.destROB != 0 && rs.busy ? std::to_string(rs.destROB) : "-")
-                  << std::setw(8) << (rs.busy ? std::to_string(rs.A) : "-");
+                  << std::setw(8) << (rs.Qj != 0 && rs.busy ? "#" + std::to_string(rs.Qj) : "-")
+                  << std::setw(8) << (rs.Qk != 0 && rs.busy ? "#" + std::to_string(rs.Qk) : "-")
+                  << std::setw(8) << (rs.destROB != 0 && rs.busy ? "#" + std::to_string(rs.destROB) : "-")
+                  << std::setw(8) << (rs.A != 0 ? std::to_string(rs.A) : "-");
         Logger::log(Logger::INFO, rsLine.str());
     };
 
