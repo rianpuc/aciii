@@ -40,48 +40,56 @@ void TomasuloSimulator::printState() {
                << std::setw(10) << "Entry"
                << std::setw(10) << "Ready"
     		   << std::setw(20) << "Instruction"
-			   << std::setw(20) << "State"
-    		   << std::setw(10) << "Dest"
+			   << std::setw(18) << "State"
+    		   << std::setw(15) << "Destination"
 			   << std::setw(10) << "Value";
 	Logger::log(Logger::INFO, robHeaders.str());
 	if (!rob.empty()){
 		for(auto& entry : rob){
-		    std::string statusStr = "";
-            ReservationStation* myRS = nullptr;
-            auto findRS = [&](std::vector<ReservationStation>& stations) {
-                for (auto& rs : stations) {
-                    if (rs.busy && rs.destROB == entry.tag) myRS = &rs;
-                }
-            };
-            findRS(addStations);
-            findRS(mulStations);
-            findRS(loadStoreStations);
-            if (myRS != nullptr) {
-                if (entry.inst.type == TYPE_I) {
-                    std::string arg1 = (myRS->Qj == 0) ? "R" + std::to_string(entry.inst.srcRegister1) : "#" + std::to_string(myRS->Qj);
-                    statusStr = "Mem[" + std::to_string(entry.inst.immediate) + " + " + arg1 + "]";
-                } else {
-                    std::string arg1 = (myRS->Qj == 0) ? "R" + std::to_string(entry.inst.srcRegister1) : "#" + std::to_string(myRS->Qj);
-                    std::string arg2 = (myRS->Qk == 0) ? "R" + std::to_string(entry.inst.srcRegister2) : "#" + std::to_string(myRS->Qk);
-                    statusStr = arg1 + " " + entry.inst.getOperator() + " " + arg2;
-                }
-            } else {
-                if (entry.inst.type == TYPE_I) {
-                    statusStr = "Mem[" + std::to_string(entry.inst.immediate) + " + R" + std::to_string(entry.inst.srcRegister1) + "]";
-                } else {
-                    statusStr = "R" + std::to_string(entry.inst.srcRegister1) + " " + entry.inst.getOperator() + " R" + std::to_string(entry.inst.srcRegister2);
-                }
-            }
-            robLine << std::left
-                    << std::setw(10) << std::to_string(entry.tag)
-                    << std::setw(10) << (entry.ready ? "Yes" : "No")
-                    << std::setw(20) << entry.inst.rawText
-                    << std::setw(20) << entry.getStateName()
-                    << std::setw(10) << (entry.inst.op == SW ? "-" : "R" + std::to_string(entry.destination))
-                    << std::setw(15) << statusStr;
-            Logger::log(Logger::INFO, robLine.str());
-            robLine.str("");
-            robLine.clear();
+			std::stringstream valueLine;
+			switch (entry.inst.op) {
+			    case LW: {
+			        int valueRegisterBase = rat.getProducer(entry.inst.srcRegister1);
+			        std::string baseRegStr;
+			        if (valueRegisterBase != -1 && entry.tag > valueRegisterBase) {
+			            baseRegStr = "#" + std::to_string(valueRegisterBase);
+			        } else {
+			            baseRegStr = "R" + std::to_string(entry.inst.srcRegister1);
+			        }
+			        valueLine << ("Mem[" + std::to_string(entry.inst.immediate) + " + " + baseRegStr + "]");
+			        break;
+			    }
+			    case SW: {
+			        int valueRegisterSW = rat.getProducer(entry.inst.destRegister);
+			        if (valueRegisterSW != -1 && entry.tag > valueRegisterSW) {
+			            valueLine << ("#" + std::to_string(valueRegisterSW));
+			        } else {
+			            valueLine << ("R" + std::to_string(entry.inst.destRegister));
+			        }
+			        break;
+			    }
+			    default: {
+			        int valueRegister1 = rat.getProducer(entry.inst.srcRegister1);
+			        int valueRegister2 = rat.getProducer(entry.inst.srcRegister2);
+			        std::string srcReg1 = valueRegister1 != -1 && entry.tag > valueRegister1 ? "#" + std::to_string(valueRegister1) : "R" + std::to_string(entry.inst.srcRegister1);
+			        std::string srcReg2 = valueRegister2 != -1 && entry.tag > valueRegister2 ? "#" + std::to_string(valueRegister2) : "R" + std::to_string(entry.inst.srcRegister2);
+			        valueLine << (srcReg1 + " " + entry.inst.getOperator() + " " + srcReg2);
+			        break;
+			    }
+			}
+		    std::string destination = entry.inst.op == SW ? "Mem[" + std::to_string(entry.inst.immediate) + " + R" + std::to_string(entry.inst.srcRegister1) + "]" : "R" + std::to_string(entry.destination);
+			robLine << std::left
+			    	<< std::setw(10) << std::to_string(entry.tag)
+					<< std::setw(10) << (entry.ready ? "Yes" : "No")
+			   		<< std::setw(20) << entry.inst.rawText
+					<< std::setw(18) << entry.getStateName()
+					<< std::setw(15) << destination
+					<< std::setw(10) << valueLine.str();
+			Logger::log(Logger::INFO, robLine.str());
+	    	robLine.str("");
+			valueLine.str("");
+        	robLine.clear();
+			valueLine.clear();
 		}
 	} else {
 		Logger::log(Logger::INFO, "");
@@ -102,6 +110,7 @@ void TomasuloSimulator::printState() {
     auto printRS = [&rsLine](const ReservationStation& rs) {
         rsLine.str("");
         rsLine.clear();
+        std::string vjLine, vkLine;
         std::string opName = rs.busy ? getOpcodeName(rs.op) : "-";
         rsLine << std::left
                   << std::setw(8) << rs.tag
@@ -210,7 +219,9 @@ void TomasuloSimulator::issue() {
         }
         else if (inst.type == TYPE_I) {
             readOperand(inst.srcRegister1, freeRS->Vj, freeRS->Qj);
-            if (inst.op == SW) readOperand(inst.destRegister, freeRS->Vk, freeRS->Qk);
+            if (inst.op == SW) {
+                readOperand(inst.destRegister, freeRS->Vk, freeRS->Qk);
+            }
             else freeRS->Qk = 0;
             freeRS->A = inst.immediate;
         }
@@ -237,6 +248,12 @@ void TomasuloSimulator::execute() {
             if (freeFU != nullptr) {
                 int v2 = (rs.op == LW || rs.op == SW) ? rs.A : rs.Vk;
                 freeFU->dispatch(rs.op, rs.Vj, v2, rs.destROB);
+                for (auto& entry : rob) {
+                    if (entry.tag == freeFU->destTag) {
+                        entry.state = EXECUTE;
+                        break;
+                    }
+                }
 				Logger::log(currentCycle, Logger::DEBUG, "Instrucao despachada: " + rs.tag + " -> Functional Unit: " + freeFU->tag);
                 rs.clear();
             }
