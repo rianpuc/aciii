@@ -110,18 +110,28 @@ void TomasuloSimulator::printState() {
     auto printRS = [&rsLine](const ReservationStation& rs) {
         rsLine.str("");
         rsLine.clear();
-        std::string vjLine, vkLine;
+        std::string vkStr = "-";
+        std::string qkStr = "-";
+        if (rs.busy) {
+            if (rs.op == LW) {
+                vkStr = "-";
+                qkStr = "-";
+            } else {
+                vkStr = (rs.Qk == 0) ? std::to_string(rs.Vk) : "-";
+                qkStr = (rs.Qk != 0) ? "#" + std::to_string(rs.Qk) : "-";
+            }
+        }
         std::string opName = rs.busy ? getOpcodeName(rs.op) : "-";
         rsLine << std::left
                   << std::setw(8) << rs.tag
                   << std::setw(8) << (rs.busy ? "Yes" : "No")
                   << std::setw(8) << opName
                   << std::setw(8) << (rs.Qj == 0 && rs.busy ? std::to_string(rs.Vj) : "-")
-                  << std::setw(8) << (rs.Qk == 0 && rs.busy ? std::to_string(rs.Vk) : "-")
+                  << std::setw(8) << vkStr
                   << std::setw(8) << (rs.Qj != 0 && rs.busy ? "#" + std::to_string(rs.Qj) : "-")
-                  << std::setw(8) << (rs.Qk != 0 && rs.busy ? "#" + std::to_string(rs.Qk) : "-")
+                  << std::setw(8) << qkStr
                   << std::setw(8) << (rs.destROB != 0 && rs.busy ? "#" + std::to_string(rs.destROB) : "-")
-                  << std::setw(8) << (rs.A != 0 ? std::to_string(rs.A) : "-");
+                  << std::setw(8) << (rs.A != -1 ? std::to_string(rs.A) : "-");
         Logger::log(Logger::INFO, rsLine.str());
     };
 
@@ -192,6 +202,7 @@ void TomasuloSimulator::issue() {
         instructionQueue.erase(instructionQueue.begin());
         freeRS->busy = true;
         freeRS->op = inst.op;
+        freeRS->instruction = inst.rawText;
         int myRobTag = robTagCounter++;
         rob.push_back(ReorderBufferEntry(myRobTag, inst));
         freeRS->destROB = myRobTag;
@@ -228,7 +239,7 @@ void TomasuloSimulator::issue() {
         if (inst.op != SW) {
             rat.setProducer(inst.destRegister, myRobTag);
         }
-        Logger::log(currentCycle, Logger::DEBUG, "Nova instrucao: " + inst.rawText + " -> Estacao de Reserva: " + freeRS->tag);
+        Logger::log(currentCycle, Logger::DEBUG, "Nova instrucao: " + inst.rawText + " enviada para ReservationStation: " + freeRS->tag);
     }
 }
 
@@ -246,15 +257,14 @@ void TomasuloSimulator::execute() {
         if (rs.busy && rs.Qj == 0 && rs.Qk == 0) {
             FunctionalUnit* freeFU = getFreeFU(alus);
             if (freeFU != nullptr) {
-                int v2 = (rs.op == LW || rs.op == SW) ? rs.A : rs.Vk;
-                freeFU->dispatch(rs.op, rs.Vj, v2, rs.destROB);
+                freeFU->dispatch(rs.op, rs.Vj, rs.Vk, rs.destROB, rs.A, rs.instruction);
                 for (auto& entry : rob) {
                     if (entry.tag == freeFU->destTag) {
                         entry.state = EXECUTE;
                         break;
                     }
                 }
-				Logger::log(currentCycle, Logger::DEBUG, "Instrucao despachada: " + rs.tag + " -> Functional Unit: " + freeFU->tag);
+				Logger::log(currentCycle, Logger::DEBUG, "Instrucao " + rs.instruction + " da ReservationStation " + rs.tag + " despachada para a Functional Unit: " + freeFU->tag);
                 rs.clear();
             }
         }
@@ -291,7 +301,7 @@ void TomasuloSimulator::writeResult() {
             if (entry.tag == readyFU->destTag) {
                 entry.ready = true;
                 entry.state = WRITE_RESULT;
-                if (readyFU->op == SW) entry.destination = readyFU->result;
+                if (readyFU->op == SW) { entry.destination = readyFU->result; entry.value = readyFU->val2; }
 				else entry.value = finalBroadcastValue;
                 break;
             }
@@ -302,7 +312,7 @@ void TomasuloSimulator::writeResult() {
             cdb.resultValue = finalBroadcastValue;
             Logger::log(currentCycle, Logger::DEBUG, "Dado salvo no CDB! " +
                 readyFU->tag +
-                " finalizou com o valor: " + std::to_string(cdb.resultValue));
+                " finalizou a operacao: " + readyFU->rawInstruction + " com o valor: " + std::to_string(cdb.resultValue));
             auto wakeUp = [&](std::vector<ReservationStation>& stations) {
                 for (auto& rs : stations) {
                     if (rs.busy) {
@@ -315,8 +325,8 @@ void TomasuloSimulator::writeResult() {
             wakeUp(mulStations);
             wakeUp(loadStoreStations);
         } else {
-            Logger::log(currentCycle, Logger::DEBUG, "SW Tag " + std::to_string(readyFU->destTag) +
-                " calculou o endereço e aguarda no ROB.");
+            Logger::log(currentCycle, Logger::DEBUG, readyFU->tag +
+                " finalizou a operacao: " + readyFU->rawInstruction + " e agora aguarda no RoB.");
         }
         readyFU->clear();
     }
@@ -339,7 +349,7 @@ void TomasuloSimulator::commit() {
         else {
             memory.at(head.destination) = head.value;
             Logger::log(currentCycle, Logger::DEBUG, "COMMIT! " + head.inst.rawText +
-                        " foi oficializada e gravou na RAM[" + std::to_string(head.destination) + "]");
+                        " foi oficializada e gravou na RAM[" + std::to_string(head.destination) + "] o valor " + std::to_string(head.value));
         }
         head.state = COMMITTED;
         rob.pop_front();

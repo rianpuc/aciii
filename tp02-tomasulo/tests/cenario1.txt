@@ -1,0 +1,13 @@
+// =====================================================================
+// ARQUIVO DE TESTE: TOMASULO SIMULATOR
+// Arquitetura: 32 Registradores (R0-R31) | ISA Didatica (R-Type, I-Type)
+// =====================================================================
+
+// ---------------------------------------------------------
+// CENARIO 1: A Ultrapassagem (Out-of-Order Execution)
+// Objetivo: Provar que a SUB passa na frente da MUL e da ADD.
+// ---------------------------------------------------------
+LW R2, 100(R0)    // Traz um valor da memoria para R2
+MUL R3, R2, R4    // RAW: Precisa esperar o LW. Vai demorar muitos ciclos!
+ADD R5, R3, R6    // RAW: Fica presa na Estacao de Reserva esperando a MUL acabar.
+SUB R8, R9, R10   // INDEPENDENTE! O seu log deve mostrar essa SUB executando e terminando ANTES da MUL.

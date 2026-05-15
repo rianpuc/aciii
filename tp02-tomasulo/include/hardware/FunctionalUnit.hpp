@@ -14,18 +14,22 @@ public:
     int val1, val2;
     int destTag;
     int result;
+    int A;
+    std::string rawInstruction;
     FunctionalUnit(std::string tag, int cycles) {
         this->tag = tag;
         this->cycles = cycles;
         this->cyclesLeft = cycles;
         clear();
     }
-    void dispatch(Opcode operation, int v1, int v2, int tag) {
+    void dispatch(Opcode operation, int v1, int v2, int tag, int imm, std::string instruction) {
         op = operation;
         val1 = v1;
         val2 = v2;
         destTag = tag;
         cyclesLeft = cycles;
+        A = imm;
+        rawInstruction = instruction;
         busy = true;
         resultReady = false;
     }
@@ -41,8 +45,8 @@ public:
                     if (val2 == 0) throw TomasuloException("Divisao por zero na FU " + tag);
                     result = val1 / val2;
                     break;
-                case LW: result = val1 + val2; break;
-                case SW: result = val1 + val2; break;
+                case LW: result = val1 + A; break;
+                case SW: result = val1 + A; break;
             }
             resultReady = true;
         }
@@ -51,7 +55,8 @@ public:
         busy = false;
         resultReady = false;
         cyclesLeft = cycles;
-        val1 = val2 = destTag = result = 0;
+        rawInstruction = "";
+        val1 = val2 = destTag = result = A = 0;
     }
 };
 

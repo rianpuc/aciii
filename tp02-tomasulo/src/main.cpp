@@ -95,7 +95,7 @@ int main() {
     srand(42);
     try {
         int rsAdd = 2, rsMul = 1, rsLs = 1, aluAdd = 2, aluMul = 1, aluLs = 1, issueWidth = 2;
-        std::string filename = "input.txt";
+        std::string filename = "cenario1.txt";
         exibirMenu(rsAdd, rsMul, rsLs, aluAdd, aluMul, aluLs, issueWidth, filename);
         TomasuloSimulator sim(rsAdd, rsMul, rsLs, aluAdd, aluMul, aluLs, issueWidth);
         sim.run(filename);

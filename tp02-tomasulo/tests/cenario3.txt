@@ -1,0 +1,13 @@
+// =====================================================================
+// ARQUIVO DE TESTE: TOMASULO SIMULATOR
+// Arquitetura: 32 Registradores (R0-R31) | ISA Didatica (R-Type, I-Type)
+// =====================================================================
+
+// ---------------------------------------------------------
+// CENARIO 3: Cascata de Memoria e Aritmetica
+// Objetivo: Testar o Parser novo lidando com Imediatos/Offsets.
+// ---------------------------------------------------------
+LW R20, 0(R21)    // Carrega um dado base
+ADD R20, R20, R22 // Modifica o dado carregado
+ADD R21, R16, R18
+SW R20, 4(R21)    // Salva o resultado modificado no proximo espaco de memoria

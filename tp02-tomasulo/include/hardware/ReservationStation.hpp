@@ -15,6 +15,7 @@ struct ReservationStation {
     int A;
     int result;
     int delayTimer;
+    std::string instruction;
     ReservationStation(std::string t) : tag(t) {
         clear();
     }
@@ -23,10 +24,11 @@ struct ReservationStation {
         op = ADD;
         Vj = 0; Vk = 0;
         Qj = 0; Qk = 0;
-        A = 0;
+        A = -1;
         result = 0;
         destROB = 0;
         delayTimer = -1;
+        instruction = "";
     }
     bool isReady() const {
         return busy && (Qj == 0) && (Qk == 0);

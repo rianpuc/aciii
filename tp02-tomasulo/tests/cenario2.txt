@@ -1,0 +1,14 @@
+// =====================================================================
+// ARQUIVO DE TESTE: TOMASULO SIMULATOR
+// Arquitetura: 32 Registradores (R0-R31) | ISA Didatica (R-Type, I-Type)
+// =====================================================================
+
+// ---------------------------------------------------------
+// CENARIO 2: Renomeacao de Registradores (Register Renaming)
+// Objetivo: Provar que o WAW e o WAR nao travam o pipeline.
+// ---------------------------------------------------------
+ADD R1, R11, R12  // Escreve em R1
+SUB R15, R1, R13  // RAW: Le de R1 (espera o ADD)
+MUL R1, R16, R17  // WAW (Escreve no mesmo R1 do ADD) e WAR (Escreve no R1 que a SUB ainda quer ler).
+// O Tomasulo deve renomear esse R1 da MUL para um registrador fisico secreto.
+// A MUL nao precisa esperar a SUB terminar de ler!
