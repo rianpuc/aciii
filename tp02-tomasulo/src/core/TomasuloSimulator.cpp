@@ -20,11 +20,11 @@ TomasuloSimulator::TomasuloSimulator(const int rsAdd, const int rsMul, const int
 	fuAluMul.reserve(aluMul);
 	fuAluLS.reserve(aluLs);
     registerFile.reserve(32);
-    for (int i = 0; i < 32; i++) registerFile.push_back((rand() % 127) + 1);
+    for (int i = 0; i < 32; i++) registerFile.push_back((rand() % 15) + 1);
 	for (int i = 0; i < aluAdd; i++) fuAluAdd.push_back(FunctionalUnit("ADD" + std::to_string(i+1), ADD_SUB_CYCLES));
 	for (int i = 0; i < aluMul; i++) fuAluMul.push_back(FunctionalUnit("MUL" + std::to_string(i+1), MUL_DIV_CYCLES));
 	for (int i = 0; i < aluLs; i++) fuAluLS.push_back(FunctionalUnit("LS" + std::to_string(i+1), LW_SW_CYCLES));
-    for (int i = 0; i < MEMORY_SIZE; i++) memory.push_back((rand() % 255) + 1);
+    for (int i = 0; i < MEMORY_SIZE; i++) memory.push_back((rand() % 7) + 1);
     for (int i = 0; i < rsAdd; i++) addStations.push_back(ReservationStation("rsAdd" + std::to_string(i+1)));
     for (int i = 0; i < rsMul; i++) mulStations.push_back(ReservationStation("rsMul" + std::to_string(i+1)));
     for (int i = 0; i < rsLs; i++) loadStoreStations.push_back(ReservationStation("rsLS" + std::to_string(i+1)));

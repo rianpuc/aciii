@@ -1,0 +1,14 @@
+// =====================================================================
+// ARQUIVO DE TESTE: TOMASULO SIMULATOR
+// Arquitetura: 32 Registradores (R0-R31) | ISA Didatica
+// =====================================================================
+
+// ---------------------------------------------------------
+// CENARIO 5: O Ouroboros de Memoria (Auto-Referencia)
+// Objetivo: Testar se o Vj, Vk e A sobrevivem a calculos cruzados.
+// ---------------------------------------------------------
+LW  R20, 10(R0)    // Carrega um valor base na sorte
+LW  R21, 20(R0)    // Carrega um offset aleatorio
+MUL R22, R20, R21  // R22 = Dado extremamente demorado
+ADD R23, R0, R22   // Copia R22 para R23 (WAR disfarçado)
+SW  R22, 50(R23)   // SATANICO: O endereco depende de R23, e o dado eh o R22!

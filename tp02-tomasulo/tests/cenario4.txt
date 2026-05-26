@@ -1,0 +1,15 @@
+// =====================================================================
+// ARQUIVO DE TESTE: TOMASULO SIMULATOR
+// Arquitetura: 32 Registradores (R0-R31) | ISA Didatica
+// =====================================================================
+
+// ---------------------------------------------------------
+// CENARIO 4: O Pesadelo das Falsas Dependencias (WAW/WAR)
+// Objetivo: Forcar a RAT a renomear o R1 multiplas vezes no mesmo ciclo.
+// ---------------------------------------------------------
+ADD R1, R2, R3    // Cria o R1 "Versao 1"
+MUL R4, R1, R5    // Usa o R1 "Versao 1"
+SUB R1, R6, R7    // Escreve por cima! Cria o R1 "Versao 2" (WAW Hazard)
+ADD R8, R1, R9    // Usa o R1 "Versao 2" (RAW)
+LW  R1, 0(R10)    // Escreve de novo! Cria o R1 "Versao 3" (WAW Hazard)
+SW  R1, 100(R11)  // Salva o R1 "Versao 3" na memoria

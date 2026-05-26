@@ -1,0 +1,15 @@
+// =====================================================================
+// ARQUIVO DE TESTE: TOMASULO SIMULATOR
+// Arquitetura: 32 Registradores (R0-R31) | ISA Didatica
+// =====================================================================
+
+// ---------------------------------------------------------
+// CENARIO 6: A Centopeia (Corrente infinita de RAW)
+// Objetivo: Forcar CPI maximo, testar limite do Forwarding (CDB).
+// ---------------------------------------------------------
+LW  R1, 0(R2)
+ADD R1, R1, R3    // Espera o LW
+MUL R1, R1, R4    // Espera o ADD
+SUB R1, R1, R5    // Espera o MUL
+ADD R1, R1, R6    // Espera o SUB
+SW  R1, 0(R7)     // Espera o ultimo ADD

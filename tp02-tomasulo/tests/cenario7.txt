@@ -1,0 +1,14 @@
+// =====================================================================
+// ARQUIVO DE TESTE: TOMASULO SIMULATOR
+// Arquitetura: 32 Registradores (R0-R31) | ISA Didatica
+// =====================================================================
+
+// ---------------------------------------------------------
+// CENARIO 7: Tiroteio no Escuro (Memory Aliasing)
+// Objetivo: Enganar a fila de Load/Store com endereços dinamicos.
+// ---------------------------------------------------------
+ADD R5, R0, R10    // R5 = R10 (ex: 100)
+ADD R6, R0, R10    // R6 = R10 (ex: 100)
+SW  R8, 50(R5)     // Salva R8 no endereco (50 + 100 = 150)
+LW  R9, 50(R6)     // Le do endereco (50 + 100 = 150)
+ADD R11, R9, R1    // Usa o valor lido
