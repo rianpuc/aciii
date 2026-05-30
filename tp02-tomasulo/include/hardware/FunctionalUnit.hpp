@@ -15,6 +15,7 @@ public:
     int destTag;
     int result;
     int A;
+    bool bypassMem;
     std::string rawInstruction;
     FunctionalUnit(std::string tag, int cycles) {
         this->tag = tag;
@@ -22,7 +23,7 @@ public:
         this->cyclesLeft = cycles;
         clear();
     }
-    void dispatch(Opcode operation, int v1, int v2, int tag, int imm, std::string instruction) {
+    void dispatch(Opcode operation, int v1, int v2, int tag, int imm, std::string instruction, bool bypassMemory) {
         op = operation;
         val1 = v1;
         val2 = v2;
@@ -32,9 +33,15 @@ public:
         rawInstruction = instruction;
         busy = true;
         resultReady = false;
+        bypassMem = bypassMemory;
     }
     void tick() {
         if (!busy || resultReady) return;
+        if (op == LW && bypassMem) {
+            result = val1;
+            resultReady = true;
+            cyclesLeft = 1;
+        }
         cyclesLeft--;
         if (cyclesLeft == 0) {
             switch (op) {
@@ -45,7 +52,11 @@ public:
                     if (val2 == 0) throw TomasuloException("Divisao por zero na FU " + tag);
                     result = val1 / val2;
                     break;
-                case LW: result = val1 + A; break;
+                case LW:
+                    if (!bypassMem) {
+                        result = val1 + A;
+                    }
+                    break;
                 case SW: result = val1 + A; break;
             }
             resultReady = true;
@@ -56,6 +67,7 @@ public:
         resultReady = false;
         cyclesLeft = cycles;
         rawInstruction = "";
+        bypassMem = false;
         val1 = val2 = destTag = result = A = 0;
     }
 };

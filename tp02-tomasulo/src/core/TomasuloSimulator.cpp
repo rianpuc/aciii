@@ -7,23 +7,21 @@
 #include <iostream>
 #include <iomanip>
 #define MEMORY_SIZE 1024
-#define ADD_SUB_CYCLES 1
-#define MUL_DIV_CYCLES 2
-#define LW_SW_CYCLES 2
+#pragma GCC diagnostic ignored "-Wsign-compare"
 
-TomasuloSimulator::TomasuloSimulator(const int rsAdd, const int rsMul, const int rsLs, const int aluAdd, const int aluMul, const int aluLs, const int issue) {
+TomasuloSimulator::TomasuloSimulator(const int rsAdd, const int rsMul, const int rsLs, const int aluAdd, const int aluMul, const int aluLs, const int cdbWidth, const int latAdd, const int latMul, const int latLs) {
     currentCycle = 0;
     isFinished = false;
-    this->issueWidth = issue;
+    this->cdbWidth = cdbWidth;
     memory.reserve(MEMORY_SIZE);
 	fuAluAdd.reserve(aluAdd);
 	fuAluMul.reserve(aluMul);
 	fuAluLS.reserve(aluLs);
     registerFile.reserve(32);
     for (int i = 0; i < 32; i++) registerFile.push_back((rand() % 15) + 1);
-	for (int i = 0; i < aluAdd; i++) fuAluAdd.push_back(FunctionalUnit("ADD" + std::to_string(i+1), ADD_SUB_CYCLES));
-	for (int i = 0; i < aluMul; i++) fuAluMul.push_back(FunctionalUnit("MUL" + std::to_string(i+1), MUL_DIV_CYCLES));
-	for (int i = 0; i < aluLs; i++) fuAluLS.push_back(FunctionalUnit("LS" + std::to_string(i+1), LW_SW_CYCLES));
+	for (int i = 0; i < aluAdd; i++) fuAluAdd.push_back(FunctionalUnit("ADD" + std::to_string(i+1), latAdd));
+	for (int i = 0; i < aluMul; i++) fuAluMul.push_back(FunctionalUnit("MUL" + std::to_string(i+1), latMul));
+	for (int i = 0; i < aluLs; i++) fuAluLS.push_back(FunctionalUnit("LS" + std::to_string(i+1), latLs));
     for (int i = 0; i < MEMORY_SIZE; i++) memory.push_back((rand() % 7) + 1);
     for (int i = 0; i < rsAdd; i++) addStations.push_back(ReservationStation("rsAdd" + std::to_string(i+1)));
     for (int i = 0; i < rsMul; i++) mulStations.push_back(ReservationStation("rsMul" + std::to_string(i+1)));
@@ -239,6 +237,10 @@ void TomasuloSimulator::issue() {
         if (inst.op != SW) {
             rat.setProducer(inst.destRegister, myRobTag);
         }
+        if (inst.op == SW && freeRS->Qj == 0) {
+            rob.back().effectiveAddress = freeRS->Vj + inst.immediate;
+            rob.back().addressReady = true;
+        }
         Logger::log(currentCycle, Logger::DEBUG, "Nova instrucao: " + inst.rawText + " enviada para ReservationStation: " + freeRS->tag);
     }
 }
@@ -255,9 +257,39 @@ void TomasuloSimulator::execute() {
     };
 	auto tryDispatch = [&](ReservationStation& rs, std::vector<FunctionalUnit>& alus) {
         if (rs.busy && rs.Qj == 0 && rs.Qk == 0) {
+            if (rs.op == LW) {
+                int lwAddr = rs.Vj + rs.A;
+                int lwPhysicalIndex = -1;
+                for (int i = 0; i < rob.size(); i++) {
+                    if (rob[i].tag == rs.destROB) {
+                        lwPhysicalIndex = i;
+                        break;
+                    }
+                }
+                if (lwPhysicalIndex != -1) {
+                    for (int i = lwPhysicalIndex - 1; i >= 0; i--) {
+                        auto& entry = rob[i];
+                        if (entry.state == COMMITTED) break;
+
+                        if (entry.inst.op == SW) {
+                            if (!entry.addressReady) return;
+                            if (entry.effectiveAddress == lwAddr) {
+                                if (entry.ready) {
+                                    rs.Vj = entry.value;
+                                    rs.bypassMemory = true;
+                                    Logger::log(currentCycle, Logger::DEBUG,"Bypass! Roubando valor " + std::to_string(entry.value) + " do " + entry.inst.rawText + " para: " + rs.instruction);
+                                    break;
+                                } else {
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             FunctionalUnit* freeFU = getFreeFU(alus);
             if (freeFU != nullptr) {
-                freeFU->dispatch(rs.op, rs.Vj, rs.Vk, rs.destROB, rs.A, rs.instruction);
+                freeFU->dispatch(rs.op, rs.Vj, rs.Vk, rs.destROB, rs.A, rs.instruction, rs.bypassMemory);
                 for (auto& entry : rob) {
                     if (entry.tag == freeFU->destTag) {
                         entry.state = EXECUTE;
@@ -287,12 +319,29 @@ void TomasuloSimulator::writeResult() {
     findReady(fuAluMul);
     findReady(fuAluLS);
     if (readyFUS.empty()) return;
+    int writesThisCycle = 0;
     for (FunctionalUnit* readyFU : readyFUS) {
+        if (writesThisCycle >= cdbWidth) {
+            Logger::log(currentCycle, Logger::DEBUG, "STALL ON CDB: " + readyFU->rawInstruction + " finalizou, mas o barramento esta lotado! Aguardando...");
+            break;
+        }
 		int finalBroadcastValue = readyFU->result;
         bool broadcastToCDB = true;
 		if (readyFU->op == LW) {
             int address = readyFU->result;
-            finalBroadcastValue = memory[address];
+		    if (readyFU->bypassMem) {
+		        finalBroadcastValue = address;
+		    } else {
+		        int rawAddress = readyFU->val1 + readyFU->A;
+		        int safeAddress = std::abs(rawAddress) % MEMORY_SIZE;
+		        if (rawAddress < 0 || rawAddress >= MEMORY_SIZE) {
+		            Logger::log(Logger::WARNING, "Excecao de Hardware! Endereco " + std::to_string(rawAddress) +
+                                " fora dos limites. MMU redirecionando para endereco seguro " + std::to_string(safeAddress));
+		            finalBroadcastValue = memory[safeAddress];
+		        } else {
+		            finalBroadcastValue = memory[address];
+		        }
+		    }
         }
         else if (readyFU->op == SW) {
             broadcastToCDB = false;
@@ -301,8 +350,13 @@ void TomasuloSimulator::writeResult() {
             if (entry.tag == readyFU->destTag) {
                 entry.ready = true;
                 entry.state = WRITE_RESULT;
-                if (readyFU->op == SW) { entry.destination = readyFU->result; entry.value = readyFU->val2; }
-				else entry.value = finalBroadcastValue;
+                if (readyFU->op == SW) {
+                    entry.destination = readyFU->result;
+                    entry.value = readyFU->val2;
+                    entry.effectiveAddress = readyFU->result;
+                    entry.addressReady = true;
+                }
+                else entry.value = finalBroadcastValue;
                 break;
             }
         }
@@ -329,6 +383,7 @@ void TomasuloSimulator::writeResult() {
                 " finalizou a operacao: " + readyFU->rawInstruction + " e agora aguarda no RoB.");
         }
         readyFU->clear();
+        writesThisCycle++;
     }
 }
 
@@ -347,9 +402,18 @@ void TomasuloSimulator::commit() {
                         " no Reg R" + std::to_string(head.destination));
         }
         else {
-            memory.at(head.destination) = head.value;
+            int rawAddress = head.effectiveAddress;
+            int safeAddress = std::abs(rawAddress) % MEMORY_SIZE;
+            if (rawAddress < 0 || rawAddress >= MEMORY_SIZE) {
+                Logger::log(Logger::WARNING, "Excecao de Hardware! Endereco " + std::to_string(rawAddress) +
+                            " fora dos limites. MMU redirecionando para endereco seguro " + std::to_string(safeAddress));
+                memory.at(safeAddress) = head.value;
+            } else {
+                memory.at(rawAddress) = head.value;
+            }
+            rawAddress = safeAddress;
             Logger::log(currentCycle, Logger::DEBUG, "COMMIT! " + head.inst.rawText +
-                        " foi oficializada e gravou na RAM[" + std::to_string(head.destination) + "] o valor " + std::to_string(head.value));
+            " foi oficializada e gravou na RAM[" + std::to_string(rawAddress) + "] o valor " + std::to_string(head.value));
         }
         head.state = COMMITTED;
         rob.pop_front();
@@ -364,3 +428,28 @@ void TomasuloSimulator::checkFinishCondition() {
     for (const auto& rs : loadStoreStations) if (rs.busy) return;
     isFinished = true;
 }
+
+void TomasuloSimulator::setRegisterValue(int regIndex, int value) {
+    if (regIndex >= 0 && regIndex < registerFile.size()) {
+        registerFile[regIndex] = value;
+        Logger::log(Logger::INFO, "Registrador R" + std::to_string(regIndex) + " inicializado com o valor " + std::to_string(value));
+    }
+}
+
+void TomasuloSimulator::setMemoryValue(int memAddress, int value) {
+    if (memAddress >= 0 && memAddress < memory.size()) {
+        memory[memAddress] = value;
+        Logger::log(Logger::INFO, "Memoria RAM[" + std::to_string(memAddress) + "] inicializada com o valor " + std::to_string(value));
+    } else {
+        Logger::log(Logger::WARNING, "Endereco de memoria invalido.");
+    }
+}
+
+int TomasuloSimulator::getRegistersSize() {
+    return static_cast<int>(registerFile.size());
+}
+
+int TomasuloSimulator::getMemorySize() {
+    return static_cast<int>(memory.size());
+}
+

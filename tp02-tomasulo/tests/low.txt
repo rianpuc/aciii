@@ -1,4 +1,3 @@
-ADD R1, R2, R3
-SUB R4, R5, R6
-MUL R7, R1, R8
-ADD R9, R4, R10
+// R1 começa valendo 3000 (Endereço estupidamente alto)
+SW R2, 0(R1)        // Vai tentar gravar no endereço 3000. MMU espelha para 952.
+LW R3, 0(R1)        // Vai tentar ler do endereço 3000.

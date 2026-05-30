@@ -15,7 +15,10 @@ class TomasuloSimulator {
 private:
     int currentCycle;
     bool isFinished;
-    int issueWidth;
+    int cdbWidth;
+    int latencyAdd;
+    int latencyMul;
+    int latencyLS;
     std::vector<FunctionalUnit> fuAluAdd;
     std::vector<FunctionalUnit> fuAluMul;
     std::vector<FunctionalUnit> fuAluLS;
@@ -36,9 +39,13 @@ private:
     void commit();
     void checkFinishCondition();
 public:
-    TomasuloSimulator(int rsAdd, int rsMul, int rsLs, int aluAdd, int aluMul, int aluLs, int issue);
+    TomasuloSimulator(int rsAdd, int rsMul, int rsLs, int aluAdd, int aluMul, int aluLs, int cdbWidth, int latAdd, int latMul, int latLs);
+    int getRegistersSize();
+    int getMemorySize();
     void printState();
     void run(const std::string& filename);
+    void setRegisterValue(int regIndex, int value);
+    void setMemoryValue(int memAddress, int value);
 };
 
 #endif

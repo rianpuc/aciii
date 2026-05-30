@@ -15,6 +15,7 @@ struct ReservationStation {
     int A;
     int result;
     int delayTimer;
+    bool bypassMemory;
     std::string instruction;
     ReservationStation(std::string t) : tag(t) {
         clear();
@@ -28,6 +29,7 @@ struct ReservationStation {
         result = 0;
         destROB = 0;
         delayTimer = -1;
+        bypassMemory = false;
         instruction = "";
     }
     bool isReady() const {

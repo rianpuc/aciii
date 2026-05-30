@@ -1,0 +1,6 @@
+// Aliasing MESMO endereco (RAW via memoria)
+// SW grava 15 em Mem[11]; Mem[11] inicial = 3 (distinto!)
+// LW deve ler 15, NAO 3.  R1 esperado = 15+11 = 26 (bug daria 3+11=14)
+SW  R8, 0(R0)
+LW  R9, 0(R0)
+ADD R1, R9, R0
