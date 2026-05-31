@@ -3,9 +3,10 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <deque>
 
-std::vector<Instruction> Parser::parseFile(const std::string& filename) {
-    std::vector<Instruction> instructions;
+std::deque<Instruction> Parser::parseFile(const std::string& filename) {
+    std::deque<Instruction> instructions;
     std::ifstream file(filename);
     if (!file.is_open()) {
         throw TomasuloException("Nao foi possivel abrir o arquivo: " + filename);

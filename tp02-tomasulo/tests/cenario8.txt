@@ -1,0 +1,13 @@
+MUL R1, R2, R3      // Inst 1: A Âncora. Demora 10 ciclos e trava o topo do ROB.
+SUB R1, R4, R5      // Inst 2: WAW (Falsa dependencia). A RAT renomeia R1 e deixa executar!
+ADD R6, R1, R1      // Inst 3: RAW na Inst 2. Vai disputar o CDB com outras ALUs.
+
+SW  R6, 100(R0)     // Inst 4: Store de R6 na RAM[100].
+LW  R7, 100(R0)     // Inst 5: BYPASS DE MEMORIA! Vai roubar o dado da Inst 4.
+
+SW  R8, 0(R1)       // Inst 6: Store perigoso. O endereco sobe do R1 que ta vindo da Inst 2.
+LW  R9, 200(R0)     // Inst 7: BLIND TRAP! Fica com medo do SW acima e trava na Estacao de Reserva.
+
+SUB R10, R10, R10   // Inst 8: Zera o R10 (R10 = 0). Executa rapidinho.
+DIV R11, R12, R10   // Inst 9: A BOMBA! Divisao por zero. Fica envenenada, mas nao cracha a maquina.
+ADD R13, R11, R11   // Inst 10: Execucao Zumbi. Rouba o veneno e calcula lixo achando que ta tudo bem.

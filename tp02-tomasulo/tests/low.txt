@@ -1,3 +1,6 @@
-// R1 começa valendo 3000 (Endereço estupidamente alto)
-SW R2, 0(R1)        // Vai tentar gravar no endereço 3000. MMU espelha para 952.
-LW R3, 0(R1)        // Vai tentar ler do endereço 3000.
+// Teste de Excecao Precisa: O Veneno Silencioso
+MUL R1, R2, R3      // 1. Demora 10 ciclos. Trava o Commit do ROB.
+SUB R5, R6, R6      // 2. Rápida. Força o R5 a valer ZERO (R6 - R6 = 0).
+DIV R4, R7, R5      // 3. DIVISAO POR ZERO! (R7 / 0). Vai envenenar o resultado.
+ADD R8, R4, R4      // 4. Vai usar o R4 envenenado! Finge que nada aconteceu.
+ADD R9, R9, R9      // 5. Instrucao independente qualquer.

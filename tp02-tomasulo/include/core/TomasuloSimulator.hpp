@@ -22,7 +22,7 @@ private:
     std::vector<FunctionalUnit> fuAluAdd;
     std::vector<FunctionalUnit> fuAluMul;
     std::vector<FunctionalUnit> fuAluLS;
-    std::vector<Instruction> instructionQueue;
+    std::deque<Instruction> instructionQueue;
     CommonDataBus cdb;
     RegisterAliasTable rat;
     std::vector<int> registerFile;

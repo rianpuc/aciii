@@ -16,6 +16,7 @@ public:
     int result;
     int A;
     bool bypassMem;
+    bool exception;
     std::string rawInstruction;
     FunctionalUnit(std::string tag, int cycles) {
         this->tag = tag;
@@ -34,6 +35,7 @@ public:
         busy = true;
         resultReady = false;
         bypassMem = bypassMemory;
+        exception = false;
     }
     void tick() {
         if (!busy || resultReady) return;
@@ -49,8 +51,12 @@ public:
                 case SUB: result = val1 - val2; break;
                 case MUL: result = val1 * val2; break;
                 case DIV:
-                    if (val2 == 0) throw TomasuloException("Divisao por zero na FU " + tag);
-                    result = val1 / val2;
+                    if (val2 == 0) {
+                        result = 0;
+                        exception = true;
+                    } else {
+                        result = val1 / val2;
+                    }
                     break;
                 case LW:
                     if (!bypassMem) {
@@ -67,7 +73,7 @@ public:
         resultReady = false;
         cyclesLeft = cycles;
         rawInstruction = "";
-        bypassMem = false;
+        bypassMem = exception = false;
         val1 = val2 = destTag = result = A = 0;
     }
 };

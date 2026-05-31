@@ -171,10 +171,16 @@ void TomasuloSimulator::run(const std::string& filename) {
     Logger::log(Logger::INFO, "Iniciando Simulacao de Tomasulo...");
     while (!isFinished) {
         currentCycle++;
-        commit();
-        writeResult();
-        execute();
-        issue();
+        try {
+            commit();
+            writeResult();
+            execute();
+            issue();
+        } catch (const TomasuloException& e) {
+            Logger::log(Logger::ERROR, "CRASH DETECTADO! Imprimindo estado fatal do Ciclo " + std::to_string(currentCycle));
+            printState();
+            throw;
+        }
         printState();
         checkFinishCondition();
         if (currentCycle > 500) {
@@ -197,7 +203,7 @@ void TomasuloSimulator::issue() {
             for (auto& rs : loadStoreStations) if (!rs.busy) { freeRS = &rs; break; }
         }
         if (freeRS == nullptr) break;
-        instructionQueue.erase(instructionQueue.begin());
+        instructionQueue.pop_front();
         freeRS->busy = true;
         freeRS->op = inst.op;
         freeRS->instruction = inst.rawText;
@@ -270,7 +276,6 @@ void TomasuloSimulator::execute() {
                     for (int i = lwPhysicalIndex - 1; i >= 0; i--) {
                         auto& entry = rob[i];
                         if (entry.state == COMMITTED) break;
-
                         if (entry.inst.op == SW) {
                             if (!entry.addressReady) return;
                             if (entry.effectiveAddress == lwAddr) {
@@ -321,12 +326,12 @@ void TomasuloSimulator::writeResult() {
     if (readyFUS.empty()) return;
     int writesThisCycle = 0;
     for (FunctionalUnit* readyFU : readyFUS) {
-        if (writesThisCycle >= cdbWidth) {
+        bool requiresCDB = (readyFU->op != SW);
+        if (requiresCDB && writesThisCycle >= cdbWidth) {
             Logger::log(currentCycle, Logger::DEBUG, "STALL ON CDB: " + readyFU->rawInstruction + " finalizou, mas o barramento esta lotado! Aguardando...");
-            break;
+            continue;
         }
 		int finalBroadcastValue = readyFU->result;
-        bool broadcastToCDB = true;
 		if (readyFU->op == LW) {
             int address = readyFU->result;
 		    if (readyFU->bypassMem) {
@@ -343,12 +348,10 @@ void TomasuloSimulator::writeResult() {
 		        }
 		    }
         }
-        else if (readyFU->op == SW) {
-            broadcastToCDB = false;
-        }
         for (auto& entry : rob) {
             if (entry.tag == readyFU->destTag) {
                 entry.ready = true;
+                entry.exception = readyFU->exception;
                 entry.state = WRITE_RESULT;
                 if (readyFU->op == SW) {
                     entry.destination = readyFU->result;
@@ -360,7 +363,7 @@ void TomasuloSimulator::writeResult() {
                 break;
             }
         }
-		if (broadcastToCDB) {
+		if (requiresCDB) {
             cdb.hasData = true;
             cdb.sourceReservationStation = readyFU->destTag;
             cdb.resultValue = finalBroadcastValue;
@@ -378,12 +381,15 @@ void TomasuloSimulator::writeResult() {
             wakeUp(addStations);
             wakeUp(mulStations);
             wakeUp(loadStoreStations);
+		    writesThisCycle++;
         } else {
             Logger::log(currentCycle, Logger::DEBUG, readyFU->tag +
-                " finalizou a operacao: " + readyFU->rawInstruction + " e agora aguarda no RoB.");
+                            " finalizou a operacao: " + readyFU->rawInstruction +
+                            " [Endereco: " + std::to_string(readyFU->result) +
+                            " | Valor a Gravar: " + std::to_string(readyFU->val2) +
+                            "] e agora aguarda no RoB.");
         }
         readyFU->clear();
-        writesThisCycle++;
     }
 }
 
@@ -391,7 +397,10 @@ void TomasuloSimulator::commit() {
     while (!rob.empty()) {
         ReorderBufferEntry& head = rob.front();
         if (!head.ready) break;
-
+        if (head.exception) {
+            throw TomasuloException(
+                "EXCECAO PRECISA! Divisao por zero na instrucao: " + head.inst.rawText);
+        }
         if (head.inst.op != SW) {
             registerFile.at(head.destination) = head.value;
             if (rat.getProducer(head.destination) == head.tag) {
@@ -423,9 +432,6 @@ void TomasuloSimulator::commit() {
 void TomasuloSimulator::checkFinishCondition() {
     if (!instructionQueue.empty()) return;
     if (!rob.empty()) return;
-    for (const auto& rs : addStations) if (rs.busy) return;
-    for (const auto& rs : mulStations) if (rs.busy) return;
-    for (const auto& rs : loadStoreStations) if (rs.busy) return;
     isFinished = true;
 }
 
