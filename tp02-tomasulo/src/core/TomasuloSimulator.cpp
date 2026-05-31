@@ -4,6 +4,7 @@
 #include "../../include/utils/Parser.hpp"
 #include "../../include/utils/Logger.hpp"
 #include "../../include/utils/TomasuloException.hpp"
+#include <algorithm>
 #include <iostream>
 #include <iomanip>
 #define MEMORY_SIZE 1024
@@ -306,9 +307,23 @@ void TomasuloSimulator::execute() {
             }
         }
     };
-	for (auto& rs : addStations) tryDispatch(rs, fuAluAdd);
-    for (auto& rs : mulStations) tryDispatch(rs, fuAluMul);
-    for (auto& rs : loadStoreStations) tryDispatch(rs, fuAluLS);
+    auto dispatchOldestFirst = [&](std::vector<ReservationStation>& stations, std::vector<FunctionalUnit>& alus) {
+        std::vector<ReservationStation*> readyStations;
+        for (auto& rs : stations) {
+            if (rs.busy && rs.Qj == 0 && rs.Qk == 0) {
+                readyStations.push_back(&rs);
+            }
+        }
+        std::sort(readyStations.begin(), readyStations.end(), [](ReservationStation* a, ReservationStation* b) {
+            return a->destROB < b->destROB;
+        });
+        for (auto* rs : readyStations) {
+            tryDispatch(*rs, alus);
+        }
+    };
+    dispatchOldestFirst(addStations, fuAluAdd);
+    dispatchOldestFirst(mulStations, fuAluMul);
+    dispatchOldestFirst(loadStoreStations, fuAluLS);
 }
 
 void TomasuloSimulator::writeResult() {

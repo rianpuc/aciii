@@ -10,8 +10,10 @@ Além do fluxo clássico de Tomasulo (Issue, Execute, Write Result, Commit), est
 
 * **Store-to-Load Forwarding (Bypass de Memória):** Loads podem "roubar" dados diretamente de Stores que estão aguardando no Reorder Buffer (ROB) destinados ao mesmo endereço, economizando ciclos de acesso à RAM.
 * **Desambiguação Dinâmica de Memória:** O simulador trata o *Blind Address Trap*. Se um `LW` sabe seu endereço, mas um `SW` mais antigo no ROB ainda está calculando o seu, o `LW` sofre um stall conservador para evitar leitura suja de memória, garantindo coerência absoluta.
-* **Limite de Largura de Banda do CDB:** O Common Data Bus (CDB) não é infinito. Possui um parâmetro configurável (`cdbWidth`). Múltiplas Unidades Funcionais terminando no mesmo ciclo competem pelo barramento; as perdedoras entram em estado de *Stall on CDB* sem perder dados.
-* **Hardware Memory Management Unit (MMU):** Proteção de memória via *Wrap-around* (`std::abs(addr) % MEMORY_SIZE`). Evita *Segmentation Faults* quando instruções especulativas ou erros de software calculam endereços gigantes, espelhando-os silenciosamente para espaços seguros.
+* **Limite de Largura de Banda do CDB & Passe-Livre:** O Common Data Bus (CDB) possui um parâmetro configurável (`cdbWidth`). Múltiplas Unidades Funcionais terminam no mesmo ciclo e competem pelo barramento em estado de *Stall*. Instruções `SW`, por não gerarem dados para outras RS, ganham "Passe-Livre", atualizando o ROB sem consumir banda da rede de interconexão.
+* **Escalonamento Anti-Starvation (Oldest-First):** Para evitar que instruções novas roubem ALUs de instruções antigas quando múltiplas Reservation Stations acordam no mesmo ciclo, o despachante (Dispatcher) aplica uma ordenação baseada na idade da instrução no ROB (`destROB`).
+* **Exceções Precisas e Speculative Execution (Poison Bit):** Erros de execução fora de ordem (ex: Divisão por Zero) não derrubam o processador imediatamente. A ALU injeta um "Poison Bit" no fluxo de dados, permitindo a execução especulativa de instruções dependentes. O pipeline só sofre *flush* (a exceção só é lançada) quando a instrução defeituosa atinge o topo do ROB, garantindo a integridade do estado arquitetural.
+* **Hardware Memory Management Unit (MMU):** Proteção de memória via *Wrap-around* (`std::abs(addr) % MEMORY_SIZE`). Evita *Segmentation Faults* quando instruções especulativas calculam endereços gigantes, espelhando-os silenciosamente para espaços físicos seguros.
 
 ## 🧠 Estruturas de Dados e Implementação
 
@@ -65,13 +67,15 @@ O `Parser` do simulador suporta instruções separadas por espaço ou vírgula, 
 
 **Opcodes Suportados:** `ADD`, `SUB`, `MUL`, `DIV`, `LW`, `SW`
 
-**Exemplo de código** (`tests/cenario_waw.txt`):
+**Exemplo de código** (`tests/boss_final.txt`):
 
 ```Snippet de código
-// Demonstração de Write-After-Write e Forwarding
-MUL R1, R2, R3      // R1 entra em espera longa
-ADD R4, R1, R1      // Depende da MUL (RAW)
-ADD R1, R5, R6      // Renomeação resolve o WAW
-SW  R1, 100(R0)     // Guarda valor de R1
-LW  R8, 100(R0)     // Sofre bypass automático do SW sem acessar a RAM!
+// Teste de Estresse Extremo: Caos do Silicio Superescalar
+MUL R1, R2, R3      // Inst 1: A Âncora. Demora X ciclos e trava o topo do ROB.
+SUB R1, R4, R5      // Inst 2: WAW (Falsa dependencia). A RAT renomeia R1 e deixa executar!
+ADD R6, R1, R1      // Inst 3: RAW na Inst 2. Vai disputar a ALU com outras instrucoes.
+SW  R6, 100(R0)     // Inst 4: Store sem usar o CDB.
+LW  R7, 100(R0)     // Inst 5: BYPASS DE MEMORIA! Rouba o dado da Inst 4 do ROB.
+DIV R11, R12, R10   // Inst 6: A BOMBA! Divisao por zero levanta flag de Poison Bit.
+ADD R13, R11, R11   // Inst 7: Executa com o dado envenenado antes da maquina travar no Commit.
 ```

@@ -1,6 +1,6 @@
-// Teste de Excecao Precisa: O Veneno Silencioso
-MUL R1, R2, R3      // 1. Demora 10 ciclos. Trava o Commit do ROB.
-SUB R5, R6, R6      // 2. Rápida. Força o R5 a valer ZERO (R6 - R6 = 0).
-DIV R4, R7, R5      // 3. DIVISAO POR ZERO! (R7 / 0). Vai envenenar o resultado.
-ADD R8, R4, R4      // 4. Vai usar o R4 envenenado! Finge que nada aconteceu.
-ADD R9, R9, R9      // 5. Instrucao independente qualquer.
+// TESTE DE ESTRESSE: Prioridade de Despacho (Anti-Starvation)
+
+MUL R1, R2, R3      // Inst 1: A Bomba. Ocupa a rsMul1. Segura o R1 por longos 15 ciclos.
+ADD R8, R9, R10     // Inst 2: A Isca. Ocupa a rsAdd1. Não depende de ninguem, entao executa e some!
+ADD R4, R1, R5      // Inst 3: A VELHA (ROB 3). Como a Isca ta na rsAdd1, ela cai na rsAdd2. Fica esperando R1.
+ADD R6, R1, R7      // Inst 4: A NOVA (ROB 4). O Issue trava ate a Isca acabar. Quando a Isca some, essa cai na rsAdd1! Fica esperando R1.
