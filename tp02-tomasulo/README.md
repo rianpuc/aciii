@@ -79,3 +79,10 @@ LW  R7, 100(R0)     // Inst 5: BYPASS DE MEMORIA! Rouba o dado da Inst 4 do ROB.
 DIV R11, R12, R10   // Inst 6: A BOMBA! Divisao por zero levanta flag de Poison Bit.
 ADD R13, R11, R11   // Inst 7: Executa com o dado envenenado antes da maquina travar no Commit.
 ```
+
+## 👥 Membros do Grupo
+- Enzo Castro Figueredo - [Github](https://github.com/oEnzoCastro)
+- Gustavo Pereira Rodrigues - [Github](https://github.com/GustavoPR35)
+- Rafael Soares Iannini - [Github](https://github.com/rafaeliannini)
+- Rian Eduardo Dias Lopes - [Github](https://github.com/rianpuc)
+- Samuel Correia Pedrosa - [Github](https://github.com/samulkil)
